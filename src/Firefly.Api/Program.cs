@@ -27,8 +27,12 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 
 // 3. Register Application Services
 builder.Services.AddScoped<ITokenService, TokenService>();
+
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
+
+builder.Services.AddScoped<IQuotationService, QuotationService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 // 4. Configure CORS for React Frontend
 builder.Services.AddCors(options =>

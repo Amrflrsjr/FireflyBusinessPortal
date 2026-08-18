@@ -139,20 +139,27 @@ namespace Firefly.Domain.Entities
         public Quotation? Quotation { get; set; }
         public int CustomerId { get; set; }
         public Customer Customer { get; set; } = null!;
-        public int ContactId { get; set; }
-        public CustomerContact Contact { get; set; } = null!;
+        public int? ContactId { get; set; }
+        public CustomerContact? Contact { get; set; }
 
         public string ContactNameSnapshot { get; set; } = string.Empty;
         public string ContactEmailSnapshot { get; set; } = string.Empty;
         public string ContactPositionSnapshot { get; set; } = string.Empty;
 
-        public string Status { get; set; } = "Active";
-        public string PaymentStatus { get; set; } = "Unpaid";
+        public DateTime IssueDate { get; set; } = DateTime.UtcNow;
+        public DateTime DueDate { get; set; }
+        public string VATType { get; set; } = "Inclusive";
+        public string Status { get; set; } = "Unpaid"; // Unpaid, PartiallyPaid, Paid, Cancelled
+
         public decimal Subtotal { get; set; }
         public decimal VATAmount { get; set; }
         public decimal TotalAmount { get; set; }
-        public decimal Balance { get; set; }
-        public DateTime IssuedAt { get; set; } = DateTime.UtcNow;
+        public decimal TotalPaid { get; set; }
+        public decimal BalanceDue { get; set; }
+
+        public string Notes { get; set; } = string.Empty;
+        public string CreatedByFK { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public ICollection<InvoiceItem> Items { get; set; } = new List<InvoiceItem>();
         public ICollection<Payment> Payments { get; set; } = new List<Payment>();
@@ -178,12 +185,13 @@ namespace Firefly.Domain.Entities
         public int PaymentId { get; set; }
         public int InvoiceId { get; set; }
         public Invoice Invoice { get; set; } = null!;
+        public decimal AmountPaid { get; set; }
         public DateTime PaymentDate { get; set; } = DateTime.UtcNow;
-        public decimal Amount { get; set; }
         public string PaymentMethod { get; set; } = string.Empty;
         public string ReferenceNumber { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
         public string RecordedByFK { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
     public class Expense

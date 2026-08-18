@@ -1,19 +1,11 @@
 ﻿using Firefly.Domain.Entities;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace Firefly.Infrastructure.Persistence
 {
     public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     {
-        public class ApplicationUser : IdentityUser
-        {
-            public string FullName { get; set; } = string.Empty;
-            public bool IsActive { get; set; } = true;
-            public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-            public DateTime? UpdatedAt { get; set; }
-        }
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options) { }
 
         public DbSet<Permission> Permissions => Set<Permission>();
