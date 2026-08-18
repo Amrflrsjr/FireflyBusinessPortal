@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:17
+    container_name: firefly-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: firefly_db
+      POSTGRES_USER: firefly
+      POSTGRES_PASSWORD: firefly_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - firefly_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  firefly_postgres_data:

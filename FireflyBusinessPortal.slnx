@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Firefly.Api/Firefly.Api.csproj" />
+    <Project Path="src/Firefly.Application/Firefly.Application.csproj" />
+    <Project Path="src/Firefly.Domain/Firefly.Domain.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
+    <Project Path="tests/Firefly.UnitTests/Firefly.UnitTests.csproj" />
+  </Folder>
+</Solution>
