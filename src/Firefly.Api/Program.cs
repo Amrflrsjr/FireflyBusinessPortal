@@ -3,6 +3,7 @@ using Firefly.Application.Common.Interfaces;
 using Firefly.Domain.Entities;
 using Firefly.Infrastructure.Persistence;
 using Firefly.Infrastructure.Services;
+using QuestPDF.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -25,6 +26,9 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
+// Set QuestPDF License
+QuestPDF.Settings.License = LicenseType.Community;
+
 // 3. Register Application Services
 builder.Services.AddScoped<ITokenService, TokenService>();
 
@@ -33,6 +37,9 @@ builder.Services.AddScoped<IProductService, ProductService>();
 
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+
+builder.Services.AddScoped<IPdfService, PdfService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // 4. Configure CORS for React Frontend
 builder.Services.AddCors(options =>

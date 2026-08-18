@@ -48,5 +48,51 @@ namespace Firefly.Api.Controllers
             if (!updated) return NotFound();
             return NoContent();
         }
+
+        [HttpGet("{id:int}/pdf")]
+        public async Task<IActionResult> DownloadPdf(
+            int id,
+            [FromServices] IPdfService pdfService)
+        {
+            var quotation = await _quotationService.GetQuotationByIdAsync(id);
+            if (quotation == null) return NotFound();
+
+            var pdfBytes = pdfService.GenerateQuotationPdf(quotation);
+            return File(pdfBytes, "application/pdf", $"Estimate_{quotation.QuotationNumber}.pdf");
+        }
+
+        [HttpGet("{id:int}/email-preview")]
+        public async Task<IActionResult> GetEmailPreview(int id)
+        {
+            var preview = await _quotationService.GetEmailPreviewAsync(id);
+            if (preview == null) return NotFound();
+
+            return Ok(preview);
+        }
+
+        [HttpPost("{id:int}/send-email")]
+        public async Task<IActionResult> SendEmail(
+            int id,
+            [FromBody] SendEmailRequestDto dto,
+            [FromServices] IPdfService pdfService,
+            [FromServices] IEmailService emailService)
+        {
+            var quotation = await _quotationService.GetQuotationByIdAsync(id);
+            if (quotation == null) return NotFound();
+
+            var pdfBytes = pdfService.GenerateQuotationPdf(quotation);
+
+            await emailService.SendDocumentEmailAsync(
+                dto.RecipientEmails,
+                dto.Subject,
+                dto.Body,
+                pdfBytes,
+                $"Estimate_{quotation.QuotationNumber}.pdf"
+            );
+
+            await _quotationService.UpdateStatusAsync(id, new UpdateQuotationStatusDto("Sent"));
+
+            return Ok(new { message = "Email sent successfully." });
+        }
     }
 }

@@ -6,6 +6,7 @@
     <Project Path="src/Firefly.Api/Firefly.Api.csproj" />
     <Project Path="src/Firefly.Application/Firefly.Application.csproj" />
     <Project Path="src/Firefly.Domain/Firefly.Domain.csproj" />
+    <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />

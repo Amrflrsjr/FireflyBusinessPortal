@@ -8,5 +8,6 @@ namespace Firefly.Application.Common.Interfaces
         Task<QuotationResponseDto?> GetQuotationByIdAsync(int id);
         Task<QuotationResponseDto> CreateQuotationAsync(CreateQuotationDto dto, string userId);
         Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto);
+        Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id);
     }
 }

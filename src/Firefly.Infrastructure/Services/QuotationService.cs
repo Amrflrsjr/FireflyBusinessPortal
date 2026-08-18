@@ -164,5 +164,45 @@ namespace Firefly.Infrastructure.Services
                 )).ToList()
             );
         }
+
+        public async Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id)
+        {
+            var q = await _context.Quotations
+                .Include(x => x.Customer)
+                .FirstOrDefaultAsync(x => x.QuotationId == id);
+
+            if (q == null) return null;
+
+            var settings = await _context.CompanySettings.FirstOrDefaultAsync();
+
+            string subject = "";
+            if (!string.IsNullOrWhiteSpace(settings?.PaymentOptions)) // Or DefaultEmailSubject if property exists
+            {
+                subject = $"Quotation #{q.QuotationNumber} - {q.Customer?.CompanyName}";
+            }
+            else
+            {
+                subject = $"Quotation #{q.QuotationNumber}";
+            }
+
+            string body = "";
+
+            var recipients = new List<string>();
+            if (!string.IsNullOrEmpty(q.ContactEmailSnapshot))
+            {
+                recipients.Add(q.ContactEmailSnapshot);
+            }
+
+            return new DocumentEmailPreviewDto(
+                q.QuotationId,
+                q.QuotationNumber,
+                recipients,
+                subject,
+                body,
+                q.Customer?.CompanyName ?? string.Empty,
+                q.ContactNameSnapshot,
+                q.TotalAmount
+            );
+        }
     }
 }
