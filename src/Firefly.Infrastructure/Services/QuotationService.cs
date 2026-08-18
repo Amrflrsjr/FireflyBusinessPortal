@@ -45,9 +45,24 @@ namespace Firefly.Infrastructure.Services
             if (customer == null)
                 throw new KeyNotFoundException("Customer not found.");
 
-            var contact = customer.Contacts.FirstOrDefault(c => c.ContactId == dto.ContactId);
+            // 1. Try to match contact by ID if dto.ContactId is specified (> 0)
+            CustomerContact? contact = null;
+            if (dto.ContactId.HasValue && dto.ContactId.Value > 0)
+            {
+                contact = customer.Contacts.FirstOrDefault(c => c.ContactId == dto.ContactId.Value);
+            }
+
+            // 2. Fallback to Primary contact or first contact if no match found
             if (contact == null)
-                throw new KeyNotFoundException("Customer contact not found.");
+            {
+                contact = customer.Contacts.FirstOrDefault(c => c.IsPrimary)
+                       ?? customer.Contacts.FirstOrDefault();
+            }
+
+            // 3. Resolve contact snapshot values safely
+            string contactName = contact?.Name ?? string.Empty;
+            string contactEmail = contact?.Email ?? string.Empty;
+            string contactPosition = contact?.Position ?? string.Empty;
 
             // Calculate Totals & VAT (12% standard PH VAT rate)
             decimal rawTotal = dto.Items.Sum(i => i.Quantity * i.UnitPrice);
@@ -56,22 +71,27 @@ namespace Firefly.Infrastructure.Services
             decimal totalAmount = 0;
 
             const decimal vatRate = 0.12m;
+            string normalizedVatType = dto.VATType?.Trim() ?? "Exclusive";
 
-            switch (dto.VATType.Trim())
+            switch (normalizedVatType)
             {
                 case "Inclusive":
+                case "VAT Inclusive":
                     totalAmount = rawTotal;
                     subtotal = Math.Round(rawTotal / (1 + vatRate), 2);
                     vatAmount = totalAmount - subtotal;
                     break;
 
                 case "Exclusive":
+                case "VAT Exclusive":
                     subtotal = rawTotal;
                     vatAmount = Math.Round(rawTotal * vatRate, 2);
                     totalAmount = subtotal + vatAmount;
                     break;
 
                 case "ZeroRated":
+                case "Zero Rated":
+                case "VAT Exempt":
                 case "OutOfScope":
                 default:
                     subtotal = rawTotal;
@@ -90,10 +110,10 @@ namespace Firefly.Infrastructure.Services
             {
                 QuotationNumber = quotationNumber,
                 CustomerId = dto.CustomerId,
-                ContactId = dto.ContactId,
-                ContactNameSnapshot = contact.Name,
-                ContactEmailSnapshot = contact.Email,
-                ContactPositionSnapshot = contact.Position,
+                ContactId = contact?.ContactId ?? (dto.ContactId.HasValue && dto.ContactId.Value > 0 ? dto.ContactId : null),
+                ContactNameSnapshot = contactName,
+                ContactEmailSnapshot = contactEmail,
+                ContactPositionSnapshot = contactPosition,
                 DateGenerated = DateTime.UtcNow,
                 ValidUntil = dto.ValidUntil,
                 VATType = dto.VATType,
@@ -110,7 +130,7 @@ namespace Firefly.Infrastructure.Services
             {
                 quotation.Items.Add(new QuotationItem
                 {
-                    ProductVariantId = item.ProductVariantId,
+                    ProductVariantId = item.ProductVariantId, // Assigns int? to int?
                     Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
@@ -141,7 +161,7 @@ namespace Firefly.Infrastructure.Services
                 q.QuotationNumber,
                 q.CustomerId,
                 q.Customer != null ? q.Customer.CompanyName : string.Empty,
-                q.ContactId,
+                q.ContactId, // Passes int?
                 q.ContactNameSnapshot,
                 q.ContactEmailSnapshot,
                 q.ContactPositionSnapshot,
@@ -156,7 +176,7 @@ namespace Firefly.Infrastructure.Services
                 q.CreatedAt,
                 q.Items.Select(i => new QuotationItemResponseDto(
                     i.QuotationItemId,
-                    i.ProductVariantId,
+                    i.ProductVariantId, // Passes int?
                     i.Description,
                     i.Quantity,
                     i.UnitPrice,
@@ -175,15 +195,10 @@ namespace Firefly.Infrastructure.Services
 
             var settings = await _context.CompanySettings.FirstOrDefaultAsync();
 
-            string subject = "";
-            if (!string.IsNullOrWhiteSpace(settings?.PaymentOptions)) // Or DefaultEmailSubject if property exists
-            {
-                subject = $"Quotation #{q.QuotationNumber} - {q.Customer?.CompanyName}";
-            }
-            else
-            {
-                subject = $"Quotation #{q.QuotationNumber}";
-            }
+            string subject = !string.IsNullOrWhiteSpace(settings?.PaymentOptions)
+                ? $"Quotation #{q.QuotationNumber} - {q.Customer?.CompanyName}"
+                : $"Quotation #{q.QuotationNumber}";
+            string pdfFileName = $"Quotation_{q.QuotationNumber}.pdf";
 
             string body = "";
 
@@ -201,7 +216,8 @@ namespace Firefly.Infrastructure.Services
                 body,
                 q.Customer?.CompanyName ?? string.Empty,
                 q.ContactNameSnapshot,
-                q.TotalAmount
+                q.TotalAmount,
+                pdfFileName
             );
         }
     }

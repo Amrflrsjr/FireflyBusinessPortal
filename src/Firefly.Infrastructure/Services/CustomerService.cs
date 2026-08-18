@@ -151,5 +151,39 @@ namespace Firefly.Infrastructure.Services
                 contact.IsActive
             );
         }
+        public async Task<bool> DeleteContactAsync(int customerId, int contactId)
+        {
+            var contact = await _context.CustomerContacts
+                .FirstOrDefaultAsync(c => c.ContactId == contactId && c.CustomerId == customerId);
+
+            if (contact == null)
+                return false;
+
+            // Soft delete by marking the contact inactive
+            contact.IsActive = false;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> UpdateContactAsync(int customerId, int contactId, UpdateContactDto dto)
+        {
+            var contact = await _context.CustomerContacts
+                .FirstOrDefaultAsync(c => c.ContactId == contactId && c.CustomerId == customerId);
+
+            if (contact == null)
+                return false;
+
+            contact.Name = dto.Name;
+            contact.Department = dto.Department;
+            contact.Position = dto.Position;
+            contact.Email = dto.Email;
+            contact.Phone = dto.Phone;
+            contact.IsPrimary = dto.IsPrimary;
+            contact.IsActive = dto.IsActive;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

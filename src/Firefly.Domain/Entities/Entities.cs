@@ -94,8 +94,10 @@ namespace Firefly.Domain.Entities
         public string QuotationNumber { get; set; } = string.Empty;
         public int CustomerId { get; set; }
         public Customer Customer { get; set; } = null!;
-        public int ContactId { get; set; }
-        public CustomerContact Contact { get; set; } = null!;
+
+        // Made Nullable (int?) so quotations without formal contact records won't break foreign keys
+        public int? ContactId { get; set; }
+        public CustomerContact? Contact { get; set; }
 
         public string ContactNameSnapshot { get; set; } = string.Empty;
         public string ContactEmailSnapshot { get; set; } = string.Empty;
@@ -105,7 +107,9 @@ namespace Firefly.Domain.Entities
         public DateTime ValidUntil { get; set; }
         public string VATType { get; set; } = "Inclusive";
         public string Status { get; set; } = "Created";
-        public string NoteToCustomer { get; set; } = string.Empty;
+
+        // Made Nullable (string?) so notes are optional
+        public string? NoteToCustomer { get; set; }
         public string PreparedByFK { get; set; } = string.Empty;
 
         public decimal Subtotal { get; set; }
@@ -122,8 +126,11 @@ namespace Firefly.Domain.Entities
         public int QuotationItemId { get; set; }
         public int QuotationId { get; set; }
         public Quotation Quotation { get; set; } = null!;
-        public int ProductVariantId { get; set; }
-        public ProductVariant ProductVariant { get; set; } = null!;
+
+        // Made Nullable (int?) to allow custom non-catalog items
+        public int? ProductVariantId { get; set; }
+        public ProductVariant? ProductVariant { get; set; }
+
         public string Description { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
@@ -171,8 +178,11 @@ namespace Firefly.Domain.Entities
         public int InvoiceItemId { get; set; }
         public int InvoiceId { get; set; }
         public Invoice Invoice { get; set; } = null!;
-        public int ProductVariantId { get; set; }
-        public ProductVariant ProductVariant { get; set; } = null!;
+
+        // Made Nullable (int?) to support custom items
+        public int? ProductVariantId { get; set; }
+        public ProductVariant? ProductVariant { get; set; }
+
         public string Description { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }

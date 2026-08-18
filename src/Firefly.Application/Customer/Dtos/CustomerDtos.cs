@@ -33,7 +33,15 @@
         string Phone,
         bool IsPrimary
     );
-
+    public record UpdateContactDto(
+        string Name,
+        string Department,
+        string Position,
+        string Email,
+        string Phone,
+        bool IsPrimary,
+        bool IsActive
+    );
     public record ContactResponseDto(
         int ContactId,
         int CustomerId,

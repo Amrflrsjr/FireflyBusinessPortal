@@ -1,7 +1,7 @@
 ﻿namespace Firefly.Application.Quotations.Dtos
 {
     public record CreateQuotationItemDto(
-        int ProductVariantId,
+        int? ProductVariantId,
         string Description,
         int Quantity,
         decimal UnitPrice
@@ -9,20 +9,21 @@
 
     public record CreateQuotationDto(
         int CustomerId,
-        int ContactId,
+        int? ContactId,
         DateTime ValidUntil,
-        string VATType, // "Inclusive", "Exclusive", "ZeroRated", "OutOfScope"
-        string NoteToCustomer,
+        string VATType,
+        string? NoteToCustomer,
         List<CreateQuotationItemDto> Items
     );
 
+    // Ensure this record is present and public
     public record UpdateQuotationStatusDto(
-        string Status // "Created", "Sent", "Accepted", "Rejected", "Expired"
+        string Status
     );
 
     public record QuotationItemResponseDto(
         int QuotationItemId,
-        int ProductVariantId,
+        int? ProductVariantId,
         string Description,
         int Quantity,
         decimal UnitPrice,
@@ -34,7 +35,7 @@
         string QuotationNumber,
         int CustomerId,
         string CompanyName,
-        int ContactId,
+        int? ContactId,
         string ContactNameSnapshot,
         string ContactEmailSnapshot,
         string ContactPositionSnapshot,
@@ -42,7 +43,7 @@
         DateTime ValidUntil,
         string VATType,
         string Status,
-        string NoteToCustomer,
+        string? NoteToCustomer,
         decimal Subtotal,
         decimal VATAmount,
         decimal TotalAmount,

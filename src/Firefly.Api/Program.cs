@@ -39,6 +39,7 @@ builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 
 builder.Services.AddScoped<IPdfService, PdfService>();
+
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 // 4. Configure CORS for React Frontend
@@ -128,6 +129,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseCors("AllowReactApp");
+
 app.UseAuthentication();
 app.UseAuthorization();
 

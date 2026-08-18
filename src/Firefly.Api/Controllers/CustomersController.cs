@@ -1,5 +1,6 @@
 ﻿using Firefly.Application.Common.Interfaces;
 using Firefly.Application.Customers.Dtos;
+using Firefly.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -47,6 +48,7 @@ namespace Firefly.Api.Controllers
             return NoContent();
         }
 
+
         [HttpPost("{id:int}/contacts")]
         public async Task<IActionResult> AddContact(int id, [FromBody] CreateContactDto dto)
         {
@@ -54,5 +56,28 @@ namespace Firefly.Api.Controllers
             if (contact == null) return NotFound();
             return Ok(contact);
         }
+
+        [HttpPut("{customerId}/contacts/{contactId}")]
+        public async Task<IActionResult> UpdateContact(
+            int customerId,
+            int contactId,
+            [FromBody] UpdateContactDto dto)
+        {
+            var success = await _customerService.UpdateContactAsync(customerId, contactId, dto);
+            if (!success)
+                return NotFound("Customer or contact not found.");
+
+            return NoContent();
+        }
+
+        [HttpDelete("{customerId}/contacts/{contactId}")]
+        public async Task<IActionResult> DeleteContact(int customerId, int contactId)
+        {
+            var result = await _customerService.DeleteContactAsync(customerId, contactId);
+            if (!result) return NotFound("Contact or Customer not found");
+            return NoContent();
+        }
+
+        
     }
 }

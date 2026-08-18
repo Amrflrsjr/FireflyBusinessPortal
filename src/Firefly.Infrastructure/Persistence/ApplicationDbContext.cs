@@ -34,6 +34,10 @@ namespace Firefly.Infrastructure.Persistence
             {
                 property.SetColumnType("decimal(18,2)");
             }
+
+            // Global Query Filter: Automatically exclude soft-deleted (inactive) contacts
+            builder.Entity<CustomerContact>()
+                .HasQueryFilter(c => c.IsActive);
         }
     }
 }

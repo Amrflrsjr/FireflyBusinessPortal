@@ -21,10 +21,12 @@ namespace Firefly.Infrastructure.Services
             byte[] pdfAttachment,
             string fileName)
         {
-            var smtpHost = _config["Smtp:Host"] ?? "smtp.gmail.com";
-            var smtpPort = int.Parse(_config["Smtp:Port"] ?? "587");
-            var senderEmail = _config["Smtp:Email"] ?? "fireflycraftscebu@gmail.com";
-            var senderPassword = _config["Smtp:Password"] ?? "";
+            // Updated to "SmtpSettings" to match your appsettings.json
+            var smtpHost = _config["SmtpSettings:Host"] ?? "smtp.gmail.com";
+            var smtpPort = int.Parse(_config["SmtpSettings:Port"] ?? "587");
+            var senderEmail = _config["SmtpSettings:SenderEmail"] ?? _config["SmtpSettings:Username"] ?? "";
+            var senderPassword = _config["SmtpSettings:Password"] ?? "";
+            var senderName = _config["SmtpSettings:SenderName"] ?? "Firefly Business Portal";
 
             using var client = new SmtpClient(smtpHost, smtpPort)
             {
@@ -34,7 +36,7 @@ namespace Firefly.Infrastructure.Services
 
             using var message = new MailMessage
             {
-                From = new MailAddress(senderEmail, "Firefly Crafts PH"),
+                From = new MailAddress(senderEmail, senderName),
                 Subject = subject,
                 Body = body,
                 IsBodyHtml = false
