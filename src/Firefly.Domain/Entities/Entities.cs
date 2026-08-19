@@ -37,6 +37,7 @@ namespace Firefly.Domain.Entities
         public string TIN { get; set; } = string.Empty;
         public int? LogoFileId { get; set; }
         public string Notes { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime? UpdatedAt { get; set; }
 

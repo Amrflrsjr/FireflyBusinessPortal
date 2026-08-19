@@ -10,5 +10,7 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateProductAsync(int id, UpdateProductDto dto);
         Task<ProductVariantResponseDto?> AddVariantAsync(int productId, CreateProductVariantDto dto);
         Task<bool> UpdateVariantAsync(int variantId, UpdateProductVariantDto dto);
+        Task<bool> DeleteProductAsync(int id);
+        Task<bool> DeleteVariantAsync(int variantId);
     }
 }

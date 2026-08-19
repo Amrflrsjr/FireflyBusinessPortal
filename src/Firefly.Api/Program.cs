@@ -42,6 +42,8 @@ builder.Services.AddScoped<IPdfService, PdfService>();
 
 builder.Services.AddScoped<IEmailService, EmailService>();
 
+builder.Services.AddScoped<ISearchService, SearchService>();
+
 // 4. Configure CORS for React Frontend
 builder.Services.AddCors(options =>
 {

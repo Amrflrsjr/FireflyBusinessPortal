@@ -20,6 +20,7 @@ namespace Firefly.Infrastructure.Services
             return await _context.Quotations
                 .Include(q => q.Customer)
                 .Include(q => q.Items)
+                .Where(q => q.Status != "Cancelled") // Filter out soft-deleted/cancelled quotations[cite: 21]
                 .OrderByDescending(q => q.CreatedAt)
                 .Select(q => MapToDto(q))
                 .ToListAsync();
@@ -30,7 +31,7 @@ namespace Firefly.Infrastructure.Services
             var q = await _context.Quotations
                 .Include(x => x.Customer)
                 .Include(x => x.Items)
-                .FirstOrDefaultAsync(x => x.QuotationId == id);
+                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled"); // Ensure active quotation[cite: 21]
 
             if (q == null) return null;
             return MapToDto(q);
@@ -40,31 +41,27 @@ namespace Firefly.Infrastructure.Services
         {
             var customer = await _context.Customers
                 .Include(c => c.Contacts)
-                .FirstOrDefaultAsync(c => c.CustomerId == dto.CustomerId);
+                .FirstOrDefaultAsync(c => c.CustomerId == dto.CustomerId && c.IsActive);
 
             if (customer == null)
                 throw new KeyNotFoundException("Customer not found.");
 
-            // 1. Try to match contact by ID if dto.ContactId is specified (> 0)
             CustomerContact? contact = null;
             if (dto.ContactId.HasValue && dto.ContactId.Value > 0)
             {
-                contact = customer.Contacts.FirstOrDefault(c => c.ContactId == dto.ContactId.Value);
+                contact = customer.Contacts.FirstOrDefault(c => c.ContactId == dto.ContactId.Value && c.IsActive);
             }
 
-            // 2. Fallback to Primary contact or first contact if no match found
             if (contact == null)
             {
-                contact = customer.Contacts.FirstOrDefault(c => c.IsPrimary)
-                       ?? customer.Contacts.FirstOrDefault();
+                contact = customer.Contacts.FirstOrDefault(c => c.IsPrimary && c.IsActive)
+                       ?? customer.Contacts.FirstOrDefault(c => c.IsActive);
             }
 
-            // 3. Resolve contact snapshot values safely
             string contactName = contact?.Name ?? string.Empty;
             string contactEmail = contact?.Email ?? string.Empty;
             string contactPosition = contact?.Position ?? string.Empty;
 
-            // Calculate Totals & VAT (12% standard PH VAT rate)
             decimal rawTotal = dto.Items.Sum(i => i.Quantity * i.UnitPrice);
             decimal subtotal = 0;
             decimal vatAmount = 0;
@@ -100,7 +97,6 @@ namespace Firefly.Infrastructure.Services
                     break;
             }
 
-            // Generate Quotation Number (Format: QT-YYYYMMDD-XXXX)
             var todayPrefix = $"QT-{DateTime.UtcNow:yyyyMMdd}";
             var countToday = await _context.Quotations
                 .CountAsync(q => q.QuotationNumber.StartsWith(todayPrefix));
@@ -130,7 +126,7 @@ namespace Firefly.Infrastructure.Services
             {
                 quotation.Items.Add(new QuotationItem
                 {
-                    ProductVariantId = item.ProductVariantId, // Assigns int? to int?
+                    ProductVariantId = item.ProductVariantId,
                     Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
@@ -146,10 +142,21 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto)
         {
-            var quotation = await _context.Quotations.FindAsync(id);
+            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
             if (quotation == null) return false;
 
             quotation.Status = dto.Status;
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        // Soft delete implementation via status update to Cancelled[cite: 21]
+        public async Task<bool> DeleteQuotationAsync(int id)
+        {
+            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
+            if (quotation == null) return false;
+
+            quotation.Status = "Cancelled";
             await _context.SaveChangesAsync();
             return true;
         }
@@ -161,7 +168,7 @@ namespace Firefly.Infrastructure.Services
                 q.QuotationNumber,
                 q.CustomerId,
                 q.Customer != null ? q.Customer.CompanyName : string.Empty,
-                q.ContactId, // Passes int?
+                q.ContactId,
                 q.ContactNameSnapshot,
                 q.ContactEmailSnapshot,
                 q.ContactPositionSnapshot,
@@ -176,7 +183,7 @@ namespace Firefly.Infrastructure.Services
                 q.CreatedAt,
                 q.Items.Select(i => new QuotationItemResponseDto(
                     i.QuotationItemId,
-                    i.ProductVariantId, // Passes int?
+                    i.ProductVariantId,
                     i.Description,
                     i.Quantity,
                     i.UnitPrice,
@@ -189,7 +196,7 @@ namespace Firefly.Infrastructure.Services
         {
             var q = await _context.Quotations
                 .Include(x => x.Customer)
-                .FirstOrDefaultAsync(x => x.QuotationId == id);
+                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled"); //[cite: 21]
 
             if (q == null) return null;
 

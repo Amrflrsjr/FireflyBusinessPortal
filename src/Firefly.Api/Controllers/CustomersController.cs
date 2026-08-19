@@ -48,6 +48,13 @@ namespace Firefly.Api.Controllers
             return NoContent();
         }
 
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _customerService.DeleteCustomerAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
 
         [HttpPost("{id:int}/contacts")]
         public async Task<IActionResult> AddContact(int id, [FromBody] CreateContactDto dto)

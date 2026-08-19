@@ -19,6 +19,7 @@ namespace Firefly.Infrastructure.Services
         {
             return await _context.Customers
                 .Include(c => c.Contacts)
+                .Where(c => c.IsActive)
                 .Select(c => new CustomerResponseDto(
                     c.CustomerId,
                     c.CompanyName,
@@ -26,17 +27,19 @@ namespace Firefly.Infrastructure.Services
                     c.TIN,
                     c.Notes,
                     c.CreatedAt,
-                    c.Contacts.Select(ct => new ContactResponseDto(
-                        ct.ContactId,
-                        ct.CustomerId,
-                        ct.Name,
-                        ct.Department,
-                        ct.Position,
-                        ct.Email,
-                        ct.Phone,
-                        ct.IsPrimary,
-                        ct.IsActive
-                    )).ToList()
+                    c.Contacts
+                        .Where(ct => ct.IsActive)
+                        .Select(ct => new ContactResponseDto(
+                            ct.ContactId,
+                            ct.CustomerId,
+                            ct.Name,
+                            ct.Department,
+                            ct.Position,
+                            ct.Email,
+                            ct.Phone,
+                            ct.IsPrimary,
+                            ct.IsActive
+                        )).ToList()
                 ))
                 .ToListAsync();
         }
@@ -45,7 +48,7 @@ namespace Firefly.Infrastructure.Services
         {
             var c = await _context.Customers
                 .Include(x => x.Contacts)
-                .FirstOrDefaultAsync(x => x.CustomerId == id);
+                .FirstOrDefaultAsync(x => x.CustomerId == id && x.IsActive);
 
             if (c == null) return null;
 
@@ -56,12 +59,14 @@ namespace Firefly.Infrastructure.Services
                 c.TIN,
                 c.Notes,
                 c.CreatedAt,
-                c.Contacts.Select(ct => new ContactResponseDto(
-                    ct.ContactId,
-                    ct.CustomerId,
-                    ct.Name,
-                    ct.Department,
-                    ct.Position,
+                c.Contacts
+                    .Where(ct => ct.IsActive)
+                    .Select(ct => new ContactResponseDto(
+                        ct.ContactId,
+                        ct.CustomerId,
+                        ct.Name,
+                        ct.Department,
+                        ct.Position,
                     ct.Email,
                     ct.Phone,
                     ct.IsPrimary,
@@ -114,6 +119,25 @@ namespace Firefly.Infrastructure.Services
             customer.TIN = dto.TIN;
             customer.Notes = dto.Notes;
             customer.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> DeleteCustomerAsync(int id)
+        {
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .FirstOrDefaultAsync(c => c.CustomerId == id && c.IsActive);
+
+            if (customer == null) return false;
+
+            // Soft delete customer and all associated contacts
+            customer.IsActive = false;
+            foreach (var contact in customer.Contacts)
+            {
+                contact.IsActive = false;
+            }
 
             await _context.SaveChangesAsync();
             return true;

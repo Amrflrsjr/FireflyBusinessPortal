@@ -1,8 +1,9 @@
-﻿using System.Security.Claims;
-using Firefly.Application.Common.Interfaces;
+﻿using Firefly.Application.Common.Interfaces;
 using Firefly.Application.Invoices.Dtos;
+using Firefly.Application.Quotations.Dtos;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Firefly.Api.Controllers
 {
@@ -41,6 +42,14 @@ namespace Firefly.Api.Controllers
             return CreatedAtAction(nameof(GetById), new { id = invoice.InvoiceId }, invoice);
         }
 
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _invoiceService.DeleteInvoiceAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
         [HttpPost("{id:int}/payments")]
         public async Task<IActionResult> RecordPayment(int id, [FromBody] RecordPaymentDto dto)
         {
@@ -48,6 +57,48 @@ namespace Firefly.Api.Controllers
             var payment = await _invoiceService.RecordPaymentAsync(id, dto, userId);
             if (payment == null) return NotFound();
             return Ok(payment);
+        }
+
+        [HttpGet("{id:int}/pdf")]
+        public async Task<IActionResult> DownloadPdf(int id, [FromServices] IPdfService pdfService)
+        {
+            var invoice = await _invoiceService.GetInvoiceByIdAsync(id);
+            if (invoice == null) return NotFound();
+
+            var pdfBytes = pdfService.GenerateInvoicePdf(invoice);
+            return File(pdfBytes, "application/pdf", $"Invoice_{invoice.InvoiceNumber}.pdf");
+        }
+
+        [HttpGet("{id:int}/email-preview")]
+        public async Task<IActionResult> GetEmailPreview(int id)
+        {
+            var preview = await _invoiceService.GetEmailPreviewAsync(id);
+            if (preview == null) return NotFound();
+
+            return Ok(preview);
+        }
+
+        [HttpPost("{id:int}/send-email")]
+        public async Task<IActionResult> SendEmail(
+            int id,
+            [FromBody] SendEmailRequestDto dto,
+            [FromServices] IPdfService pdfService,
+            [FromServices] IEmailService emailService)
+        {
+            var invoice = await _invoiceService.GetInvoiceByIdAsync(id);
+            if (invoice == null) return NotFound();
+
+            var pdfBytes = pdfService.GenerateInvoicePdf(invoice);
+
+            await emailService.SendDocumentEmailAsync(
+                dto.RecipientEmails,
+                dto.Subject,
+                dto.Body,
+                pdfBytes,
+                $"Invoice_{invoice.InvoiceNumber}.pdf"
+            );
+
+            return Ok(new { message = "Invoice email sent successfully." });
         }
     }
 }

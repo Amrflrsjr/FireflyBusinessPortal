@@ -11,6 +11,39 @@ namespace Firefly.Infrastructure.Services
     {
         public byte[] GenerateQuotationPdf(QuotationResponseDto q)
         {
+            return GenerateDocumentPdf(q, "ESTIMATE");
+        }
+
+        public byte[] GenerateInvoicePdf(InvoiceResponseDto invoice)
+        {
+            // Map the invoice to the generic document format
+            var mappedDocument = new QuotationResponseDto(
+                invoice.InvoiceId,
+                invoice.InvoiceNumber,
+                invoice.CustomerId,
+                invoice.CompanyName,
+                0,
+                invoice.ContactNameSnapshot,
+                invoice.ContactEmailSnapshot,
+                "",
+                invoice.IssueDate,
+                invoice.DueDate,
+                invoice.VATType,
+                invoice.Status,
+                invoice.Notes,
+                invoice.Subtotal,
+                invoice.VATAmount,
+                invoice.TotalAmount,
+                invoice.CreatedAt,
+                new List<QuotationItemResponseDto>()
+            );
+
+            return GenerateDocumentPdf(mappedDocument, "INVOICE");
+        }
+
+        // Private helper that handles both layouts
+        private byte[] GenerateDocumentPdf(QuotationResponseDto q, string documentTitle)
+        {
             return Document.Create(container =>
             {
                 container.Page(page =>
@@ -33,8 +66,9 @@ namespace Firefly.Infrastructure.Services
 
                         row.ConstantItem(150).Column(col =>
                         {
-                            col.Item().AlignRight().Text("Estimate").Bold().FontSize(20).FontColor(Colors.Grey.Darken2);
-                            col.Item().AlignRight().Text($"ESTIMATE {q.QuotationNumber}").Bold();
+                            // Use the dynamic title here
+                            col.Item().AlignRight().Text(documentTitle).Bold().FontSize(20).FontColor(Colors.Grey.Darken2);
+                            col.Item().AlignRight().Text($"{documentTitle} {q.QuotationNumber}").Bold();
                             col.Item().AlignRight().Text($"DATE {q.DateGenerated:MM/dd/yyyy}");
                         });
                     });
@@ -131,31 +165,6 @@ namespace Firefly.Infrastructure.Services
                     });
                 });
             }).GeneratePdf();
-        }
-
-        public byte[] GenerateInvoicePdf(InvoiceResponseDto invoice)
-        {
-            // Reuses QuestPDF layout for Invoice document type
-            return GenerateQuotationPdf(new QuotationResponseDto(
-                invoice.InvoiceId,
-                invoice.InvoiceNumber,
-                invoice.CustomerId,
-                invoice.CompanyName,
-                0,
-                invoice.ContactNameSnapshot,
-                invoice.ContactEmailSnapshot,
-                "",
-                invoice.IssueDate,
-                invoice.DueDate,
-                invoice.VATType,
-                invoice.Status,
-                invoice.Notes,
-                invoice.Subtotal,
-                invoice.VATAmount,
-                invoice.TotalAmount,
-                invoice.CreatedAt,
-                new List<QuotationItemResponseDto>()
-            ));
         }
     }
 }

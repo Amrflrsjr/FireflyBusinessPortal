@@ -12,5 +12,6 @@ namespace Firefly.Application.Common.Interfaces
         Task<ContactResponseDto?> AddContactAsync(int customerId, CreateContactDto dto);
         Task<bool> UpdateContactAsync(int customerId, int contactId, UpdateContactDto dto);
         Task<bool> DeleteContactAsync(int customerId, int contactId);
+        Task<bool> DeleteCustomerAsync(int id);
     }
 }

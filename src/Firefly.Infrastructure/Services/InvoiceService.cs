@@ -1,5 +1,6 @@
 ﻿using Firefly.Application.Common.Interfaces;
 using Firefly.Application.Invoices.Dtos;
+using Firefly.Application.Quotations.Dtos;
 using Firefly.Domain.Entities;
 using Firefly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(i => i.Quotation)
                 .ThenInclude(q => q.Customer)
                 .Include(i => i.Payments)
+                .Where(i => i.Status != "Cancelled") // Filter out soft-deleted/cancelled invoices[cite: 22]
                 .OrderByDescending(i => i.CreatedAt)
                 .Select(i => MapToDto(i))
                 .ToListAsync();
@@ -32,7 +34,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(i => i.Quotation)
                 .ThenInclude(q => q.Customer)
                 .Include(i => i.Payments)
-                .FirstOrDefaultAsync(i => i.InvoiceId == id);
+                .FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status != "Cancelled"); // Ensure active invoice[cite: 22]
 
             if (invoice == null) return null;
             return MapToDto(invoice);
@@ -40,54 +42,87 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<InvoiceResponseDto> CreateInvoiceFromQuotationAsync(CreateInvoiceFromQuotationDto dto, string userId)
         {
+            // 1. Prevent duplicate conversions (Idempotency Check) excluding cancelled ones[cite: 22]
+            var existingInvoice = await _context.Invoices
+                .AnyAsync(i => i.QuotationId == dto.QuotationId && i.Status != "Cancelled");
+
+            if (existingInvoice)
+                throw new InvalidOperationException("An invoice has already been generated for this quotation.");
+
             var quotation = await _context.Quotations
                 .Include(q => q.Customer)
-                .FirstOrDefaultAsync(q => q.QuotationId == dto.QuotationId);
+                .FirstOrDefaultAsync(q => q.QuotationId == dto.QuotationId && q.Status != "Cancelled");
 
             if (quotation == null)
                 throw new KeyNotFoundException("Quotation not found.");
 
-            var todayPrefix = $"INV-{DateTime.UtcNow:yyyyMMdd}";
-            var countToday = await _context.Invoices
-                .CountAsync(i => i.InvoiceNumber.StartsWith(todayPrefix));
-            var invoiceNumber = $"{todayPrefix}-{(countToday + 1):D4}";
+            // 2. Wrap the database operations in a transaction[cite: 22]
+            using var transaction = await _context.Database.BeginTransactionAsync();
 
-            var invoice = new Invoice
+            try
             {
-                InvoiceNumber = invoiceNumber,
-                QuotationId = quotation.QuotationId,
-                CustomerId = quotation.CustomerId,
-                ContactId = quotation.ContactId,
-                ContactNameSnapshot = quotation.ContactNameSnapshot,
-                ContactEmailSnapshot = quotation.ContactEmailSnapshot,
-                ContactPositionSnapshot = quotation.ContactPositionSnapshot,
-                IssueDate = DateTime.UtcNow,
-                DueDate = dto.DueDate,
-                VATType = quotation.VATType,
-                Status = "Unpaid",
-                Subtotal = quotation.Subtotal,
-                VATAmount = quotation.VATAmount,
-                TotalAmount = quotation.TotalAmount,
-                TotalPaid = 0,
-                BalanceDue = quotation.TotalAmount,
-                Notes = dto.Notes,
-                CreatedByFK = userId,
-                CreatedAt = DateTime.UtcNow
-            };
+                var todayPrefix = $"INV-{DateTime.UtcNow:yyyyMMdd}";
+                var countToday = await _context.Invoices
+                    .CountAsync(i => i.InvoiceNumber.StartsWith(todayPrefix));
+                var invoiceNumber = $"{todayPrefix}-{(countToday + 1):D4}";
 
-            quotation.Status = "Accepted";
+                var invoice = new Invoice
+                {
+                    InvoiceNumber = invoiceNumber,
+                    QuotationId = quotation.QuotationId,
+                    CustomerId = quotation.CustomerId,
+                    ContactId = quotation.ContactId,
+                    ContactNameSnapshot = quotation.ContactNameSnapshot,
+                    ContactEmailSnapshot = quotation.ContactEmailSnapshot,
+                    ContactPositionSnapshot = quotation.ContactPositionSnapshot,
+                    IssueDate = DateTime.UtcNow,
+                    DueDate = dto.DueDate,
+                    VATType = quotation.VATType,
+                    Status = "Unpaid",
+                    Subtotal = quotation.Subtotal,
+                    VATAmount = quotation.VATAmount,
+                    TotalAmount = quotation.TotalAmount,
+                    TotalPaid = 0,
+                    BalanceDue = quotation.TotalAmount,
+                    Notes = dto.Notes,
+                    CreatedByFK = userId,
+                    CreatedAt = DateTime.UtcNow
+                };
 
-            _context.Invoices.Add(invoice);
+                // Update the quotation status[cite: 22]
+                quotation.Status = "Accepted";
+
+                _context.Invoices.Add(invoice);
+
+                // Save changes and commit transaction[cite: 22]
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return (await GetInvoiceByIdAsync(invoice.InvoiceId))!;
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        // Soft delete implementation for Invoice via status update to Cancelled[cite: 22]
+        public async Task<bool> DeleteInvoiceAsync(int id)
+        {
+            var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status != "Cancelled");
+            if (invoice == null) return false;
+
+            invoice.Status = "Cancelled";
             await _context.SaveChangesAsync();
-
-            return (await GetInvoiceByIdAsync(invoice.InvoiceId))!;
+            return true;
         }
 
         public async Task<PaymentResponseDto?> RecordPaymentAsync(int invoiceId, RecordPaymentDto dto, string userId)
         {
             var invoice = await _context.Invoices
                 .Include(i => i.Payments)
-                .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId);
+                .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && i.Status != "Cancelled"); // Ensure active invoice[cite: 22]
 
             if (invoice == null) return null;
 
@@ -105,7 +140,7 @@ namespace Firefly.Infrastructure.Services
 
             _context.Payments.Add(payment);
 
-            // Recalculate totals
+            // Recalculate totals[cite: 22]
             invoice.TotalPaid += dto.AmountPaid;
             invoice.BalanceDue = invoice.TotalAmount - invoice.TotalPaid;
 
@@ -165,6 +200,39 @@ namespace Firefly.Infrastructure.Services
                     p.Notes,
                     p.CreatedAt
                 )).ToList()
+            );
+        }
+
+        public async Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id)
+        {
+            var invoice = await _context.Invoices
+                .Include(x => x.Customer)
+                .FirstOrDefaultAsync(x => x.InvoiceId == id && x.Status != "Cancelled"); // Ensure active invoice[cite: 22]
+
+            if (invoice == null) return null;
+
+            var settings = await _context.CompanySettings.FirstOrDefaultAsync();
+
+            string subject = $"Invoice #{invoice.InvoiceNumber} - {invoice.Customer?.CompanyName}";
+            string pdfFileName = $"Invoice_{invoice.InvoiceNumber}.pdf";
+            string body = $"Dear {invoice.ContactNameSnapshot},\n\nPlease find attached the invoice {invoice.InvoiceNumber} for your review and payment.\n\nThank you,\n{settings?.CompanyName ?? "NXF Sticker Shop"}";
+
+            var recipients = new List<string>();
+            if (!string.IsNullOrEmpty(invoice.ContactEmailSnapshot))
+            {
+                recipients.Add(invoice.ContactEmailSnapshot);
+            }
+
+            return new DocumentEmailPreviewDto(
+                invoice.InvoiceId,
+                invoice.InvoiceNumber,
+                recipients,
+                subject,
+                body,
+                invoice.Customer?.CompanyName ?? string.Empty,
+                invoice.ContactNameSnapshot,
+                invoice.TotalAmount,
+                pdfFileName
             );
         }
     }

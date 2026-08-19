@@ -49,6 +49,14 @@ namespace Firefly.Api.Controllers
             return NoContent();
         }
 
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _quotationService.DeleteQuotationAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
         [HttpGet("{id:int}/pdf")]
         public async Task<IActionResult> DownloadPdf(
             int id,

@@ -47,6 +47,14 @@ namespace Firefly.Api.Controllers
             return NoContent();
         }
 
+        [HttpDelete("{id:int}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var result = await _productService.DeleteProductAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
         [HttpPost("{id:int}/variants")]
         public async Task<IActionResult> AddVariant(int id, [FromBody] CreateProductVariantDto dto)
         {
@@ -60,6 +68,14 @@ namespace Firefly.Api.Controllers
         {
             var updated = await _productService.UpdateVariantAsync(variantId, dto);
             if (!updated) return NotFound();
+            return NoContent();
+        }
+
+        [HttpDelete("variants/{variantId:int}")]
+        public async Task<IActionResult> DeleteVariant(int variantId)
+        {
+            var result = await _productService.DeleteVariantAsync(variantId);
+            if (!result) return NotFound();
             return NoContent();
         }
     }

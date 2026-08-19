@@ -19,13 +19,14 @@ namespace Firefly.Infrastructure.Services
         {
             return await _context.Products
                 .Include(p => p.Variants)
+                .Where(p => p.IsActive)
                 .Select(p => new ProductResponseDto(
                     p.ProductId,
                     p.Name,
                     p.Description,
                     p.IsActive,
                     p.CreatedAt,
-                    p.Variants.Select(v => new ProductVariantResponseDto(
+                    p.Variants.Where(v => v.IsActive).Select(v => new ProductVariantResponseDto(
                         v.ProductVariantId,
                         v.ProductId,
                         v.SKU,
@@ -43,7 +44,7 @@ namespace Firefly.Infrastructure.Services
         {
             var p = await _context.Products
                 .Include(x => x.Variants)
-                .FirstOrDefaultAsync(x => x.ProductId == id);
+                .FirstOrDefaultAsync(x => x.ProductId == id && x.IsActive);
 
             if (p == null) return null;
 
@@ -53,7 +54,7 @@ namespace Firefly.Infrastructure.Services
                 p.Description,
                 p.IsActive,
                 p.CreatedAt,
-                p.Variants.Select(v => new ProductVariantResponseDto(
+                p.Variants.Where(v => v.IsActive).Select(v => new ProductVariantResponseDto(
                     v.ProductVariantId,
                     v.ProductId,
                     v.SKU,
@@ -112,6 +113,25 @@ namespace Firefly.Infrastructure.Services
             return true;
         }
 
+        public async Task<bool> DeleteProductAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.ProductId == id && p.IsActive);
+
+            if (product == null) return false;
+
+            // Soft-delete product and its variants
+            product.IsActive = false;
+            foreach (var variant in product.Variants)
+            {
+                variant.IsActive = false;
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<ProductVariantResponseDto?> AddVariantAsync(int productId, CreateProductVariantDto dto)
         {
             var product = await _context.Products.FindAsync(productId);
@@ -155,6 +175,16 @@ namespace Firefly.Infrastructure.Services
             variant.Stock = dto.Stock;
             variant.IsActive = dto.IsActive;
 
+            await _context.SaveChangesAsync();
+            return true;
+        }
+        public async Task<bool> DeleteVariantAsync(int variantId)
+        {
+            var variant = await _context.ProductVariants.FirstOrDefaultAsync(v => v.ProductVariantId == variantId && v.IsActive);
+            if (variant == null) return false;
+
+            // Soft-delete variant
+            variant.IsActive = false;
             await _context.SaveChangesAsync();
             return true;
         }
