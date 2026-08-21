@@ -78,5 +78,28 @@ namespace Firefly.Api.Controllers
             if (!result) return NotFound();
             return NoContent();
         }
+
+        [HttpGet("deleted")]
+        public async Task<IActionResult> GetDeletedProducts()
+        {
+            var deletedProducts = await _productService.GetDeletedProductsAsync();
+            return Ok(deletedProducts);
+        }
+
+        [HttpPost("{id:int}/restore")]
+        public async Task<IActionResult> RestoreProduct(int id)
+        {
+            bool result = await _productService.RestoreProductAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpDelete("{id:int}/permanent")]
+        public async Task<IActionResult> PermanentlyDeleteProduct(int id)
+        {
+            bool result = await _productService.PermanentlyDeleteProductAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
     }
 }

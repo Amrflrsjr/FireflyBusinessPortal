@@ -209,5 +209,68 @@ namespace Firefly.Infrastructure.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<IEnumerable<CustomerResponseDto>> GetDeletedCustomersAsync()
+        {
+            return await _context.Customers
+                .Include(c => c.Contacts)
+                .Where(c => !c.IsActive)
+                .Select(c => new CustomerResponseDto(
+                    c.CustomerId,
+                    c.CompanyName,
+                    c.CompanyAddress,
+                    c.TIN,
+                    c.Notes,
+                    c.CreatedAt,
+                    c.Contacts
+                        .Select(ct => new ContactResponseDto(
+                            ct.ContactId,
+                            ct.CustomerId,
+                            ct.Name,
+                            ct.Department,
+                            ct.Position,
+                            ct.Email,
+                            ct.Phone,
+                            ct.IsPrimary,
+                            ct.IsActive
+                        )).ToList()
+                ))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreCustomerAsync(int id)
+        {
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.CustomerId == id);
+
+            if (customer == null) return false;
+
+            // Reactivate customer and their contacts
+            customer.IsActive = true;
+            foreach (var contact in customer.Contacts)
+            {
+                contact.IsActive = true;
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteCustomerAsync(int id)
+        {
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(c => c.CustomerId == id);
+
+            if (customer == null) return false;
+
+            // Permanent hard delete from database
+            _context.Customers.Remove(customer);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

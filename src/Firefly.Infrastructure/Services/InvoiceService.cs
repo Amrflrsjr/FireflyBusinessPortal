@@ -235,5 +235,46 @@ namespace Firefly.Infrastructure.Services
                 pdfFileName
             );
         }
+        public async Task<IEnumerable<InvoiceResponseDto>> GetDeletedInvoicesAsync()
+        {
+            return await _context.Invoices
+                .Include(i => i.Quotation)
+                .ThenInclude(q => q.Customer)
+                .Include(i => i.Payments)
+                .Where(i => i.Status == "Cancelled")
+                .OrderByDescending(i => i.CreatedAt)
+                .Select(i => MapToDto(i))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreInvoiceAsync(int id)
+        {
+            var invoice = await _context.Invoices
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status == "Cancelled");
+
+            if (invoice == null) return false;
+
+            // Restore status back to Unpaid (or recalculate balance if needed)
+            invoice.Status = invoice.TotalPaid > 0 ? "PartiallyPaid" : "Unpaid";
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteInvoiceAsync(int id)
+        {
+            var invoice = await _context.Invoices
+                .Include(i => i.Payments)
+                .Include(i => i.Items)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(i => i.InvoiceId == id);
+
+            if (invoice == null) return false;
+
+            // Permanent hard delete from database (including payments/items cascade)
+            _context.Invoices.Remove(invoice);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

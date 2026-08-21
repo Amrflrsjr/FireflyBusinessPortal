@@ -227,5 +227,45 @@ namespace Firefly.Infrastructure.Services
                 pdfFileName
             );
         }
+
+        public async Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync()
+        {
+            return await _context.Quotations
+                .Include(q => q.Customer)
+                .Include(q => q.Items)
+                .Where(q => q.Status == "Cancelled")
+                .OrderByDescending(q => q.CreatedAt)
+                .Select(q => MapToDto(q))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreQuotationAsync(int id)
+        {
+            var quotation = await _context.Quotations
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(q => q.QuotationId == id && q.Status == "Cancelled");
+
+            if (quotation == null) return false;
+
+            // Restore status back to Created
+            quotation.Status = "Created";
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteQuotationAsync(int id)
+        {
+            var quotation = await _context.Quotations
+                .Include(q => q.Items)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(q => q.QuotationId == id);
+
+            if (quotation == null) return false;
+
+            // Hard delete quotation and its associated items from database
+            _context.Quotations.Remove(quotation);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

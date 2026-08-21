@@ -102,5 +102,28 @@ namespace Firefly.Api.Controllers
 
             return Ok(new { message = "Email sent successfully." });
         }
+
+        [HttpGet("deleted")]
+        public async Task<IActionResult> GetDeletedQuotations()
+        {
+            var deletedQuotations = await _quotationService.GetDeletedQuotationsAsync();
+            return Ok(deletedQuotations);
+        }
+
+        [HttpPost("{id:int}/restore")]
+        public async Task<IActionResult> RestoreQuotation(int id)
+        {
+            bool result = await _quotationService.RestoreQuotationAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpDelete("{id:int}/permanent")]
+        public async Task<IActionResult> PermanentlyDeleteQuotation(int id)
+        {
+            bool result = await _quotationService.PermanentlyDeleteQuotationAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
     }
 }

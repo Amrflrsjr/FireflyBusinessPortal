@@ -1,4 +1,5 @@
-﻿using Firefly.Application.Quotations.Dtos;
+﻿using Firefly.Application.Customers.Dtos;
+using Firefly.Application.Quotations.Dtos;
 
 namespace Firefly.Application.Common.Interfaces
 {
@@ -10,5 +11,8 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto);
         Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id);
         Task<bool> DeleteQuotationAsync(int id);
+        Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync();
+        Task<bool> RestoreQuotationAsync(int id);
+        Task<bool> PermanentlyDeleteQuotationAsync(int id);
     }
 }

@@ -188,5 +188,65 @@ namespace Firefly.Infrastructure.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
+        public async Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync()
+        {
+            return await _context.Products
+                .Include(p => p.Variants)
+                .Where(p => !p.IsActive)
+                .Select(p => new ProductResponseDto(
+                    p.ProductId,
+                    p.Name,
+                    p.Description,
+                    p.IsActive,
+                    p.CreatedAt,
+                    p.Variants.Select(v => new ProductVariantResponseDto(
+                        v.ProductVariantId,
+                        v.ProductId,
+                        v.SKU,
+                        v.Color,
+                        v.Size,
+                        v.UnitPrice,
+                        v.Stock,
+                        v.IsActive
+                    )).ToList()
+                ))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreProductAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.ProductId == id);
+
+            if (product == null) return false;
+
+            // Reactivate product and its variants
+            product.IsActive = true;
+            foreach (var variant in product.Variants)
+            {
+                variant.IsActive = true;
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteProductAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.ProductId == id);
+
+            if (product == null) return false;
+
+            // Hard delete from database
+            _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+            return true;
+        }
     }
 }

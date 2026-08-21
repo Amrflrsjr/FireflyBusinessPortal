@@ -100,5 +100,28 @@ namespace Firefly.Api.Controllers
 
             return Ok(new { message = "Invoice email sent successfully." });
         }
+
+        [HttpGet("deleted")]
+        public async Task<IActionResult> GetDeletedInvoices()
+        {
+            var deletedInvoices = await _invoiceService.GetDeletedInvoicesAsync();
+            return Ok(deletedInvoices);
+        }
+
+        [HttpPost("{id:int}/restore")]
+        public async Task<IActionResult> RestoreInvoice(int id)
+        {
+            bool result = await _invoiceService.RestoreInvoiceAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpDelete("{id:int}/permanent")]
+        public async Task<IActionResult> PermanentlyDeleteInvoice(int id)
+        {
+            bool result = await _invoiceService.PermanentlyDeleteInvoiceAsync(id);
+            if (!result) return NotFound();
+            return NoContent();
+        }
     }
 }

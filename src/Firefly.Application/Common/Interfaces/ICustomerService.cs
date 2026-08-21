@@ -13,5 +13,8 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateContactAsync(int customerId, int contactId, UpdateContactDto dto);
         Task<bool> DeleteContactAsync(int customerId, int contactId);
         Task<bool> DeleteCustomerAsync(int id);
+        Task<bool> RestoreCustomerAsync(int id);
+        Task<bool> PermanentlyDeleteCustomerAsync(int id);
+        Task<IEnumerable<CustomerResponseDto>> GetDeletedCustomersAsync();
     }
 }
