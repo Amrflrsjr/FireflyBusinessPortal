@@ -18,9 +18,12 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? search,
+            [FromQuery] string? sortBy,
+            [FromQuery] bool ascending = true)
         {
-            var products = await _productService.GetAllProductsAsync();
+            var products = await _productService.GetAllProductsAsync(search, sortBy, ascending);
             return Ok(products);
         }
 

@@ -15,11 +15,32 @@ namespace Firefly.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<CustomerResponseDto>> GetAllCustomersAsync()
+        public async Task<IEnumerable<CustomerResponseDto>> GetAllCustomersAsync(string? search = null, string? sortBy = null, bool ascending = true)
         {
-            return await _context.Customers
+            var query = _context.Customers
                 .Include(c => c.Contacts)
                 .Where(c => c.IsActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(c =>
+                    c.CustomerId.ToString() == search ||
+                    c.CompanyName.ToLower().Contains(search) ||
+                    (!string.IsNullOrEmpty(c.TIN) && c.TIN.ToLower().Contains(search))
+                );
+            }
+
+            // Apply backend sorting
+            query = sortBy?.ToLower() switch
+            {
+                "tin" => ascending ? query.OrderBy(c => c.TIN) : query.OrderByDescending(c => c.TIN),
+                "createdat" => ascending ? query.OrderBy(c => c.CreatedAt) : query.OrderByDescending(c => c.CreatedAt),
+                "companyname" or _ => ascending ? query.OrderBy(c => c.CompanyName) : query.OrderByDescending(c => c.CompanyName),
+            };
+
+            return await query
                 .Select(c => new CustomerResponseDto(
                     c.CustomerId,
                     c.CompanyName,
@@ -67,11 +88,11 @@ namespace Firefly.Infrastructure.Services
                         ct.Name,
                         ct.Department,
                         ct.Position,
-                    ct.Email,
-                    ct.Phone,
-                    ct.IsPrimary,
-                    ct.IsActive
-                )).ToList()
+                        ct.Email,
+                        ct.Phone,
+                        ct.IsPrimary,
+                        ct.IsActive
+                    )).ToList()
             );
         }
 
@@ -86,10 +107,14 @@ namespace Firefly.Infrastructure.Services
                 CreatedAt = DateTime.UtcNow
             };
 
-            if (dto.InitialContacts != null)
+            if (dto.InitialContacts != null && dto.InitialContacts.Any())
             {
+                bool primaryAssigned = false;
                 foreach (var ct in dto.InitialContacts)
                 {
+                    bool makePrimary = ct.IsPrimary && !primaryAssigned;
+                    if (makePrimary) primaryAssigned = true;
+
                     customer.Contacts.Add(new CustomerContact
                     {
                         Name = ct.Name,
@@ -97,9 +122,14 @@ namespace Firefly.Infrastructure.Services
                         Position = ct.Position,
                         Email = ct.Email,
                         Phone = ct.Phone,
-                        IsPrimary = ct.IsPrimary,
+                        IsPrimary = makePrimary,
                         IsActive = true
                     });
+                }
+
+                if (!primaryAssigned && customer.Contacts.Any())
+                {
+                    customer.Contacts.First().IsPrimary = true;
                 }
             }
 
@@ -132,7 +162,6 @@ namespace Firefly.Infrastructure.Services
 
             if (customer == null) return false;
 
-            // Soft delete customer and all associated contacts
             customer.IsActive = false;
             foreach (var contact in customer.Contacts)
             {
@@ -145,8 +174,25 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<ContactResponseDto?> AddContactAsync(int customerId, CreateContactDto dto)
         {
-            var customer = await _context.Customers.FindAsync(customerId);
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .FirstOrDefaultAsync(c => c.CustomerId == customerId && c.IsActive);
+
             if (customer == null) return null;
+
+            bool isPrimary = dto.IsPrimary;
+
+            if (isPrimary)
+            {
+                foreach (var existing in customer.Contacts)
+                {
+                    existing.IsPrimary = false;
+                }
+            }
+            else if (!customer.Contacts.Any(c => c.IsActive && c.IsPrimary))
+            {
+                isPrimary = true;
+            }
 
             var contact = new CustomerContact
             {
@@ -156,7 +202,7 @@ namespace Firefly.Infrastructure.Services
                 Position = dto.Position,
                 Email = dto.Email,
                 Phone = dto.Phone,
-                IsPrimary = dto.IsPrimary,
+                IsPrimary = isPrimary,
                 IsActive = true
             };
 
@@ -175,6 +221,7 @@ namespace Firefly.Infrastructure.Services
                 contact.IsActive
             );
         }
+
         public async Task<bool> DeleteContactAsync(int customerId, int contactId)
         {
             var contact = await _context.CustomerContacts
@@ -183,27 +230,47 @@ namespace Firefly.Infrastructure.Services
             if (contact == null)
                 return false;
 
-            // Soft delete by marking the contact inactive
             contact.IsActive = false;
-
             await _context.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> UpdateContactAsync(int customerId, int contactId, UpdateContactDto dto)
         {
-            var contact = await _context.CustomerContacts
-                .FirstOrDefaultAsync(c => c.ContactId == contactId && c.CustomerId == customerId);
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .FirstOrDefaultAsync(c => c.CustomerId == customerId && c.IsActive);
 
+            if (customer == null) return false;
+
+            var contact = customer.Contacts.FirstOrDefault(c => c.ContactId == contactId);
             if (contact == null)
                 return false;
+
+            bool isPrimary = dto.IsPrimary;
+            bool hasOtherPrimary = customer.Contacts.Any(c => c.ContactId != contactId && c.IsActive && c.IsPrimary);
+
+            if (isPrimary)
+            {
+                foreach (var otherContact in customer.Contacts)
+                {
+                    if (otherContact.ContactId != contactId)
+                    {
+                        otherContact.IsPrimary = false;
+                    }
+                }
+            }
+            else if (!hasOtherPrimary && contact.IsPrimary)
+            {
+                isPrimary = true;
+            }
 
             contact.Name = dto.Name;
             contact.Department = dto.Department;
             contact.Position = dto.Position;
             contact.Email = dto.Email;
             contact.Phone = dto.Phone;
-            contact.IsPrimary = dto.IsPrimary;
+            contact.IsPrimary = isPrimary;
             contact.IsActive = dto.IsActive;
 
             await _context.SaveChangesAsync();
@@ -247,7 +314,6 @@ namespace Firefly.Infrastructure.Services
 
             if (customer == null) return false;
 
-            // Reactivate customer and their contacts
             customer.IsActive = true;
             foreach (var contact in customer.Contacts)
             {
@@ -267,7 +333,6 @@ namespace Firefly.Infrastructure.Services
 
             if (customer == null) return false;
 
-            // Permanent hard delete from database
             _context.Customers.Remove(customer);
             await _context.SaveChangesAsync();
             return true;

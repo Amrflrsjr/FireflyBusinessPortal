@@ -13,6 +13,16 @@
         DateTime ValidUntil,
         string VATType,
         string? NoteToCustomer,
+        string? Status,
+        List<CreateQuotationItemDto> Items
+    );
+
+    public record UpdateQuotationDto(
+        int CustomerId,
+        int? ContactId,
+        DateTime ValidUntil,
+        string VATType,
+        string? NoteToCustomer,
         List<CreateQuotationItemDto> Items
     );
 
@@ -27,7 +37,11 @@
         string Description,
         int Quantity,
         decimal UnitPrice,
-        decimal TotalAmount
+        decimal TotalAmount,
+        string? ProductName,
+        string? SKU,
+        string? Color,
+        string? Size
     );
 
     public record QuotationResponseDto(

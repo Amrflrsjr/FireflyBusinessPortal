@@ -6,7 +6,14 @@ namespace Firefly.Application.Common.Interfaces
 {
     public interface IInvoiceService
     {
-        Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync();
+        Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync(
+             string? search = null,
+             string? status = null,
+             DateTime? startDate = null,
+             DateTime? endDate = null,
+             string? sortBy = null,
+             bool ascending = true
+         );
         Task<InvoiceResponseDto?> GetInvoiceByIdAsync(int id);
         Task<InvoiceResponseDto> CreateInvoiceFromQuotationAsync(CreateInvoiceFromQuotationDto dto, string userId);
         Task<PaymentResponseDto?> RecordPaymentAsync(int invoiceId, RecordPaymentDto dto, string userId);

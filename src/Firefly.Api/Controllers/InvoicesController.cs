@@ -20,9 +20,15 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+         [FromQuery] string? search,
+         [FromQuery] string? status,
+         [FromQuery] DateTime? startDate,
+         [FromQuery] DateTime? endDate,
+         [FromQuery] string? sortBy,
+         [FromQuery] bool ascending = true)
         {
-            var invoices = await _invoiceService.GetAllInvoicesAsync();
+            var invoices = await _invoiceService.GetAllInvoicesAsync(search, status, startDate, endDate, sortBy, ascending);
             return Ok(invoices);
         }
 

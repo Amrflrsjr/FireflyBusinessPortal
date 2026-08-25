@@ -15,11 +15,33 @@ namespace Firefly.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<ProductResponseDto>> GetAllProductsAsync()
+        public async Task<IEnumerable<ProductResponseDto>> GetAllProductsAsync(string? search = null, string? sortBy = null, bool ascending = true)
         {
-            return await _context.Products
+            var query = _context.Products
                 .Include(p => p.Variants)
                 .Where(p => p.IsActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(p =>
+                    p.ProductId.ToString() == search ||
+                    p.Name.ToLower().Contains(search) ||
+                    p.Description.ToLower().Contains(search) ||
+                    p.Variants.Any(v => v.SKU.ToLower().Contains(search))
+                );
+            }
+
+            // Apply dynamic sorting
+            query = sortBy?.ToLower() switch
+            {
+                "description" => ascending ? query.OrderBy(p => p.Description) : query.OrderByDescending(p => p.Description),
+                "createdat" => ascending ? query.OrderBy(p => p.CreatedAt) : query.OrderByDescending(p => p.CreatedAt),
+                "name" or _ => ascending ? query.OrderBy(p => p.Name) : query.OrderByDescending(p => p.Name),
+            };
+
+            return await query
                 .Select(p => new ProductResponseDto(
                     p.ProductId,
                     p.Name,
@@ -121,7 +143,6 @@ namespace Firefly.Infrastructure.Services
 
             if (product == null) return false;
 
-            // Soft-delete product and its variants
             product.IsActive = false;
             foreach (var variant in product.Variants)
             {
@@ -178,12 +199,12 @@ namespace Firefly.Infrastructure.Services
             await _context.SaveChangesAsync();
             return true;
         }
+
         public async Task<bool> DeleteVariantAsync(int variantId)
         {
             var variant = await _context.ProductVariants.FirstOrDefaultAsync(v => v.ProductVariantId == variantId && v.IsActive);
             if (variant == null) return false;
 
-            // Soft-delete variant
             variant.IsActive = false;
             await _context.SaveChangesAsync();
             return true;
@@ -223,7 +244,6 @@ namespace Firefly.Infrastructure.Services
 
             if (product == null) return false;
 
-            // Reactivate product and its variants
             product.IsActive = true;
             foreach (var variant in product.Variants)
             {
@@ -243,7 +263,6 @@ namespace Firefly.Infrastructure.Services
 
             if (product == null) return false;
 
-            // Hard delete from database
             _context.Products.Remove(product);
             await _context.SaveChangesAsync();
             return true;

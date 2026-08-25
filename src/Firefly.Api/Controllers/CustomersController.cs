@@ -19,9 +19,12 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? search,
+            [FromQuery] string? sortBy,
+            [FromQuery] bool ascending = true)
         {
-            var customers = await _customerService.GetAllCustomersAsync();
+            var customers = await _customerService.GetAllCustomersAsync(search, sortBy, ascending);
             return Ok(customers);
         }
 
@@ -107,7 +110,5 @@ namespace Firefly.Api.Controllers
             if (!result) return NotFound();
             return NoContent();
         }
-
-
     }
 }

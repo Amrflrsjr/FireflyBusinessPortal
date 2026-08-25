@@ -19,9 +19,15 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] string? search,
+            [FromQuery] string? status,
+            [FromQuery] DateTime? startDate,
+            [FromQuery] DateTime? endDate,
+            [FromQuery] string? sortBy,
+            [FromQuery] bool ascending = true)
         {
-            var quotations = await _quotationService.GetAllQuotationsAsync();
+            var quotations = await _quotationService.GetAllQuotationsAsync(search, status, startDate, endDate, sortBy, ascending);
             return Ok(quotations);
         }
 
@@ -39,6 +45,15 @@ namespace Firefly.Api.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
             var quotation = await _quotationService.CreateQuotationAsync(dto, userId);
             return CreatedAtAction(nameof(GetById), new { id = quotation.QuotationId }, quotation);
+        }
+
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> Update(int id, [FromBody] UpdateQuotationDto dto)
+        {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
+            var result = await _quotationService.UpdateQuotationAsync(id, dto, userId);
+            if (!result) return NotFound();
+            return NoContent();
         }
 
         [HttpPatch("{id:int}/status")]

@@ -15,13 +15,67 @@ namespace Firefly.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync()
+        public async Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync(
+         string? search = null,
+         string? status = null,
+         DateTime? startDate = null,
+         DateTime? endDate = null,
+         string? sortBy = null,
+         bool ascending = true)
         {
-            return await _context.Quotations
+            var query = _context.Quotations
                 .Include(q => q.Customer)
                 .Include(q => q.Items)
-                .Where(q => q.Status != "Cancelled") // Filter out soft-deleted/cancelled quotations[cite: 21]
-                .OrderByDescending(q => q.CreatedAt)
+                .Where(q => q.Status != "Cancelled")
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(q =>
+                    q.QuotationNumber.ToLower().Contains(search) ||
+                    q.Customer.CompanyName.ToLower().Contains(search) ||
+                    (!string.IsNullOrEmpty(q.ContactNameSnapshot) && q.ContactNameSnapshot.ToLower().Contains(search))
+                );
+            }
+
+            // Backend Status Filter
+            if (!string.IsNullOrWhiteSpace(status) && status.ToLower() != "all")
+            {
+                query = query.Where(q => q.Status.ToLower() == status.ToLower());
+            }
+
+            // Backend Date Range Filters with UTC Kind adjustment
+            if (startDate.HasValue)
+            {
+                var startUtc = startDate.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc)
+                    : startDate.Value.ToUniversalTime();
+
+                query = query.Where(q => q.CreatedAt >= startUtc);
+            }
+
+            if (endDate.HasValue)
+            {
+                var endUtc = endDate.Value.Kind == DateTimeKind.Unspecified
+                    ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc)
+                    : endDate.Value.ToUniversalTime();
+
+                var adjustedEndDate = endUtc.Date.AddDays(1).AddTicks(-1);
+                query = query.Where(q => q.CreatedAt <= adjustedEndDate);
+            }
+
+            // Apply dynamic sorting
+            query = sortBy?.ToLower() switch
+            {
+                "quotationnumber" => ascending ? query.OrderBy(q => q.QuotationNumber) : query.OrderByDescending(q => q.QuotationNumber),
+                "customer" => ascending ? query.OrderBy(q => q.Customer.CompanyName) : query.OrderByDescending(q => q.Customer.CompanyName),
+                "totalamount" => ascending ? query.OrderBy(q => q.TotalAmount) : query.OrderByDescending(q => q.TotalAmount),
+                "status" => ascending ? query.OrderBy(q => q.Status) : query.OrderByDescending(q => q.Status),
+                "createdat" or _ => ascending ? query.OrderBy(q => q.CreatedAt) : query.OrderByDescending(q => q.CreatedAt),
+            };
+
+            return await query
                 .Select(q => MapToDto(q))
                 .ToListAsync();
         }
@@ -31,7 +85,7 @@ namespace Firefly.Infrastructure.Services
             var q = await _context.Quotations
                 .Include(x => x.Customer)
                 .Include(x => x.Items)
-                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled"); // Ensure active quotation[cite: 21]
+                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled");
 
             if (q == null) return null;
             return MapToDto(q);
@@ -111,9 +165,9 @@ namespace Firefly.Infrastructure.Services
                 ContactEmailSnapshot = contactEmail,
                 ContactPositionSnapshot = contactPosition,
                 DateGenerated = DateTime.UtcNow,
-                ValidUntil = dto.ValidUntil,
+                ValidUntil = dto.ValidUntil != default ? dto.ValidUntil : DateTime.UtcNow.AddDays(7),
                 VATType = dto.VATType,
-                Status = "Created",
+                Status = !string.IsNullOrWhiteSpace(dto.Status) ? dto.Status : "Created",
                 NoteToCustomer = dto.NoteToCustomer,
                 PreparedByFK = userId,
                 Subtotal = subtotal,
@@ -140,6 +194,112 @@ namespace Firefly.Infrastructure.Services
             return (await GetQuotationByIdAsync(quotation.QuotationId))!;
         }
 
+        public async Task<bool> UpdateQuotationAsync(int id, UpdateQuotationDto dto, string userId)
+        {
+            var quotation = await _context.Quotations
+                .Include(q => q.Items)
+                .Include(q => q.Customer)
+                .ThenInclude(c => c.Contacts)
+                .FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
+
+            if (quotation == null) return false;
+
+            // Optional safety check: restrict edits to Draft/Created status if desired
+            if (quotation.Status != "Created" && quotation.Status != "Draft")
+            {
+                throw new InvalidOperationException("Only quotations in Created or Draft status can be edited.");
+            }
+
+            var customer = await _context.Customers
+                .Include(c => c.Contacts)
+                .FirstOrDefaultAsync(c => c.CustomerId == dto.CustomerId && c.IsActive);
+
+            if (customer == null)
+                throw new KeyNotFoundException("Customer not found.");
+
+            CustomerContact? contact = null;
+            if (dto.ContactId.HasValue && dto.ContactId.Value > 0)
+            {
+                contact = customer.Contacts.FirstOrDefault(c => c.ContactId == dto.ContactId.Value && c.IsActive);
+            }
+
+            if (contact == null)
+            {
+                contact = customer.Contacts.FirstOrDefault(c => c.IsActive && c.IsPrimary)
+                       ?? customer.Contacts.FirstOrDefault(c => c.IsActive);
+            }
+
+            string contactName = contact?.Name ?? string.Empty;
+            string contactEmail = contact?.Email ?? string.Empty;
+            string contactPosition = contact?.Position ?? string.Empty;
+
+            decimal rawTotal = dto.Items.Sum(i => i.Quantity * i.UnitPrice);
+            decimal subtotal = 0;
+            decimal vatAmount = 0;
+            decimal totalAmount = 0;
+
+            const decimal vatRate = 0.12m;
+            string normalizedVatType = dto.VATType?.Trim() ?? "Exclusive";
+
+            switch (normalizedVatType)
+            {
+                case "Inclusive":
+                case "VAT Inclusive":
+                    totalAmount = rawTotal;
+                    subtotal = Math.Round(rawTotal / (1 + vatRate), 2);
+                    vatAmount = totalAmount - subtotal;
+                    break;
+
+                case "Exclusive":
+                case "VAT Exclusive":
+                    subtotal = rawTotal;
+                    vatAmount = Math.Round(rawTotal * vatRate, 2);
+                    totalAmount = subtotal + vatAmount;
+                    break;
+
+                case "ZeroRated":
+                case "Zero Rated":
+                case "VAT Exempt":
+                case "OutOfScope":
+                default:
+                    subtotal = rawTotal;
+                    vatAmount = 0;
+                    totalAmount = rawTotal;
+                    break;
+            }
+
+            quotation.CustomerId = dto.CustomerId;
+            quotation.ContactId = contact?.ContactId ?? (dto.ContactId.HasValue && dto.ContactId.Value > 0 ? dto.ContactId : null);
+            quotation.ContactNameSnapshot = contactName;
+            quotation.ContactEmailSnapshot = contactEmail;
+            quotation.ContactPositionSnapshot = contactPosition;
+            quotation.ValidUntil = dto.ValidUntil;
+            quotation.VATType = dto.VATType;
+            quotation.NoteToCustomer = dto.NoteToCustomer;
+            quotation.Subtotal = subtotal;
+            quotation.VATAmount = vatAmount;
+            quotation.TotalAmount = totalAmount;
+
+            // Remove old items and insert updated items list
+            _context.QuotationItems.RemoveRange(quotation.Items);
+            quotation.Items.Clear();
+
+            foreach (var item in dto.Items)
+            {
+                quotation.Items.Add(new QuotationItem
+                {
+                    ProductVariantId = item.ProductVariantId,
+                    Description = item.Description,
+                    Quantity = item.Quantity,
+                    UnitPrice = item.UnitPrice,
+                    TotalAmount = item.Quantity * item.UnitPrice
+                });
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
         public async Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto)
         {
             var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
@@ -150,7 +310,6 @@ namespace Firefly.Infrastructure.Services
             return true;
         }
 
-        // Soft delete implementation via status update to Cancelled[cite: 21]
         public async Task<bool> DeleteQuotationAsync(int id)
         {
             var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
@@ -187,7 +346,11 @@ namespace Firefly.Infrastructure.Services
                     i.Description,
                     i.Quantity,
                     i.UnitPrice,
-                    i.TotalAmount
+                    i.TotalAmount,
+                    i.ProductVariant != null ? i.ProductVariant.Product.Name : null,
+                    i.ProductVariant != null ? i.ProductVariant.SKU : null,
+                    i.ProductVariant != null ? i.ProductVariant.Color : null,
+                    i.ProductVariant != null ? i.ProductVariant.Size : null
                 )).ToList()
             );
         }
@@ -196,7 +359,7 @@ namespace Firefly.Infrastructure.Services
         {
             var q = await _context.Quotations
                 .Include(x => x.Customer)
-                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled"); //[cite: 21]
+                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled");
 
             if (q == null) return null;
 
@@ -247,7 +410,6 @@ namespace Firefly.Infrastructure.Services
 
             if (quotation == null) return false;
 
-            // Restore status back to Created
             quotation.Status = "Created";
             await _context.SaveChangesAsync();
             return true;
@@ -262,7 +424,6 @@ namespace Firefly.Infrastructure.Services
 
             if (quotation == null) return false;
 
-            // Hard delete quotation and its associated items from database
             _context.Quotations.Remove(quotation);
             await _context.SaveChangesAsync();
             return true;

@@ -16,14 +16,71 @@ namespace Firefly.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync()
-        {
-            return await _context.Invoices
-                .Include(i => i.Quotation)
-                .ThenInclude(q => q.Customer)
-                .Include(i => i.Payments)
-                .Where(i => i.Status != "Cancelled") // Filter out soft-deleted/cancelled invoices[cite: 22]
-                .OrderByDescending(i => i.CreatedAt)
+        public async Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync(
+        string? search = null,
+        string? status = null,
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? sortBy = null,
+        bool ascending = true)
+            {
+                var query = _context.Invoices
+                    .Include(i => i.Quotation)
+                    .ThenInclude(q => q.Customer)
+                    .Include(i => i.Payments)
+                    .Where(i => i.Status != "Cancelled") // Filter out soft-deleted/cancelled invoices[cite: 3]
+                    .AsQueryable();
+
+                if (!string.IsNullOrWhiteSpace(search))
+                {
+                    search = search.ToLower();
+                    query = query.Where(i =>
+                        i.InvoiceNumber.ToLower().Contains(search) ||
+                        (i.Quotation != null && i.Quotation.Customer != null && i.Quotation.Customer.CompanyName.ToLower().Contains(search))
+                    );
+                }
+
+                // New: Backend Status Filter
+                if (!string.IsNullOrWhiteSpace(status) && status.ToLower() != "all")
+                {
+                    query = query.Where(i => i.Status.ToLower() == status.ToLower());
+                }
+
+                // New: Backend Date Range Filters with UTC Kind adjustment
+                if (startDate.HasValue)
+                {
+                    // Ensure the DateTime is treated as UTC
+                    var startUtc = startDate.Value.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(startDate.Value, DateTimeKind.Utc)
+                        : startDate.Value.ToUniversalTime();
+
+                    query = query.Where(i => i.CreatedAt >= startUtc);
+                }
+
+                if (endDate.HasValue)
+                {
+                    var endUtc = endDate.Value.Kind == DateTimeKind.Unspecified
+                        ? DateTime.SpecifyKind(endDate.Value, DateTimeKind.Utc)
+                        : endDate.Value.ToUniversalTime();
+
+                    // Include the entire end day
+                    var adjustedEndDate = endUtc.Date.AddDays(1).AddTicks(-1);
+                    query = query.Where(i => i.CreatedAt <= adjustedEndDate);
+                }
+
+            // Apply dynamic sorting[cite: 3]
+            query = sortBy?.ToLower() switch
+            {
+                "invoicenumber" => ascending ? query.OrderBy(i => i.InvoiceNumber) : query.OrderByDescending(i => i.InvoiceNumber),
+                "customer" => ascending ? query.OrderBy(i => i.Quotation.Customer.CompanyName) : query.OrderByDescending(i => i.Quotation.Customer.CompanyName),
+                "issuedate" => ascending ? query.OrderBy(i => i.IssueDate) : query.OrderByDescending(i => i.IssueDate),
+                "status" => ascending ? query.OrderBy(i => i.Status) : query.OrderByDescending(i => i.Status),
+                "balancedue" => ascending ? query.OrderBy(i => i.BalanceDue) : query.OrderByDescending(i => i.BalanceDue),
+                "totalamount" => ascending ? query.OrderBy(i => i.TotalAmount) : query.OrderByDescending(i => i.TotalAmount),
+                "createdat" or _ => ascending ? query.OrderBy(i => i.CreatedAt) : query.OrderByDescending(i => i.CreatedAt),
+            };
+
+            return await query
                 .Select(i => MapToDto(i))
                 .ToListAsync();
         }
@@ -34,7 +91,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(i => i.Quotation)
                 .ThenInclude(q => q.Customer)
                 .Include(i => i.Payments)
-                .FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status != "Cancelled"); // Ensure active invoice[cite: 22]
+                .FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status != "Cancelled"); // Ensure active invoice[cite: 25]
 
             if (invoice == null) return null;
             return MapToDto(invoice);
@@ -42,7 +99,6 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<InvoiceResponseDto> CreateInvoiceFromQuotationAsync(CreateInvoiceFromQuotationDto dto, string userId)
         {
-            // 1. Prevent duplicate conversions (Idempotency Check) excluding cancelled ones[cite: 22]
             var existingInvoice = await _context.Invoices
                 .AnyAsync(i => i.QuotationId == dto.QuotationId && i.Status != "Cancelled");
 
@@ -56,7 +112,6 @@ namespace Firefly.Infrastructure.Services
             if (quotation == null)
                 throw new KeyNotFoundException("Quotation not found.");
 
-            // 2. Wrap the database operations in a transaction[cite: 22]
             using var transaction = await _context.Database.BeginTransactionAsync();
 
             try
@@ -89,12 +144,10 @@ namespace Firefly.Infrastructure.Services
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // Update the quotation status[cite: 22]
                 quotation.Status = "Accepted";
 
                 _context.Invoices.Add(invoice);
 
-                // Save changes and commit transaction[cite: 22]
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
@@ -107,7 +160,6 @@ namespace Firefly.Infrastructure.Services
             }
         }
 
-        // Soft delete implementation for Invoice via status update to Cancelled[cite: 22]
         public async Task<bool> DeleteInvoiceAsync(int id)
         {
             var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == id && i.Status != "Cancelled");
@@ -122,7 +174,7 @@ namespace Firefly.Infrastructure.Services
         {
             var invoice = await _context.Invoices
                 .Include(i => i.Payments)
-                .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && i.Status != "Cancelled"); // Ensure active invoice[cite: 22]
+                .FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && i.Status != "Cancelled"); // Ensure active invoice[cite: 25]
 
             if (invoice == null) return null;
 
@@ -140,7 +192,6 @@ namespace Firefly.Infrastructure.Services
 
             _context.Payments.Add(payment);
 
-            // Recalculate totals[cite: 22]
             invoice.TotalPaid += dto.AmountPaid;
             invoice.BalanceDue = invoice.TotalAmount - invoice.TotalPaid;
 
@@ -207,7 +258,7 @@ namespace Firefly.Infrastructure.Services
         {
             var invoice = await _context.Invoices
                 .Include(x => x.Customer)
-                .FirstOrDefaultAsync(x => x.InvoiceId == id && x.Status != "Cancelled"); // Ensure active invoice[cite: 22]
+                .FirstOrDefaultAsync(x => x.InvoiceId == id && x.Status != "Cancelled"); // Ensure active invoice[cite: 25]
 
             if (invoice == null) return null;
 
@@ -235,6 +286,7 @@ namespace Firefly.Infrastructure.Services
                 pdfFileName
             );
         }
+
         public async Task<IEnumerable<InvoiceResponseDto>> GetDeletedInvoicesAsync()
         {
             return await _context.Invoices
@@ -255,7 +307,6 @@ namespace Firefly.Infrastructure.Services
 
             if (invoice == null) return false;
 
-            // Restore status back to Unpaid (or recalculate balance if needed)
             invoice.Status = invoice.TotalPaid > 0 ? "PartiallyPaid" : "Unpaid";
             await _context.SaveChangesAsync();
             return true;
@@ -271,7 +322,6 @@ namespace Firefly.Infrastructure.Services
 
             if (invoice == null) return false;
 
-            // Permanent hard delete from database (including payments/items cascade)
             _context.Invoices.Remove(invoice);
             await _context.SaveChangesAsync();
             return true;
