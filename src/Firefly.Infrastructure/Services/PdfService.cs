@@ -7,6 +7,7 @@ using QuestPDF.Infrastructure;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Firefly.Infrastructure.Services
 {
@@ -14,20 +15,34 @@ namespace Firefly.Infrastructure.Services
     {
         public byte[] GenerateQuotationPdf(QuotationResponseDto q)
         {
-            return GenerateDocumentPdf(q, "ESTIMATE");
+            return GenerateDocumentPdf(q, "QUOTATION");
         }
 
         public byte[] GenerateInvoicePdf(InvoiceResponseDto invoice)
         {
+            var mappedItems = invoice.Items?.Select(item => new QuotationItemResponseDto(
+                item.QuotationItemId,
+                item.ProductVariantId,
+                item.Description,
+                item.Quantity,
+                item.UnitPrice,
+                item.TotalAmount,
+                item.ProductName,
+                item.SKU,
+                item.Color,
+                item.Size
+            )).ToList() ?? new List<QuotationItemResponseDto>();
+
             var mappedDocument = new QuotationResponseDto(
                 invoice.InvoiceId,
                 invoice.InvoiceNumber,
                 invoice.CustomerId,
                 invoice.CompanyName,
-                0,
+                invoice.CompanyAddress,
+                null,
                 invoice.ContactNameSnapshot,
                 invoice.ContactEmailSnapshot,
-                "",
+                string.Empty,
                 invoice.IssueDate,
                 invoice.DueDate,
                 invoice.VATType,
@@ -37,7 +52,7 @@ namespace Firefly.Infrastructure.Services
                 invoice.VATAmount,
                 invoice.TotalAmount,
                 invoice.CreatedAt,
-                new List<QuotationItemResponseDto>()
+                mappedItems
             );
 
             return GenerateDocumentPdf(mappedDocument, "INVOICE");
@@ -45,10 +60,9 @@ namespace Firefly.Infrastructure.Services
 
         private byte[] GenerateDocumentPdf(QuotationResponseDto q, string documentTitle)
         {
-            byte[] logoBytes = null;
+            byte[]? logoBytes = null;
             try
             {
-                // Try multiple potential file paths where the logo might reside at runtime
                 string[] possiblePaths = {
                     Path.Combine(AppContext.BaseDirectory, "Assets", "Firefly Logo - No BG.png"),
                     Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "Firefly.Api", "Assets", "Firefly Logo - No BG.png"),
@@ -77,7 +91,6 @@ namespace Firefly.Infrastructure.Services
                     page.Margin(30);
                     page.DefaultTextStyle(x => x.FontSize(10).FontColor(Colors.Grey.Darken3));
 
-                    // Header with Logo
                     page.Header().Column(headerCol =>
                     {
                         headerCol.Item().Row(row =>
@@ -104,11 +117,9 @@ namespace Firefly.Infrastructure.Services
                             });
                         });
 
-                        // Subtle Divider Line below header
                         headerCol.Item().PaddingTop(15).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                     });
 
-                    // Address and Ship To Section
                     page.Content().PaddingVertical(15).Column(col =>
                     {
                         col.Item().Row(row =>
@@ -116,7 +127,7 @@ namespace Firefly.Infrastructure.Services
                             row.RelativeItem().Column(c =>
                             {
                                 c.Item().Text("ADDRESS").Bold().FontSize(9).FontColor(Colors.Grey.Medium);
-                                c.Item().Text(q.CompanyName).Bold();
+                                c.Item().Text(string.IsNullOrWhiteSpace(q.CompanyAddress) ? "N/A" : q.CompanyAddress).Bold();
                                 c.Item().Text(q.ContactNameSnapshot);
                             });
 
@@ -130,7 +141,6 @@ namespace Firefly.Infrastructure.Services
 
                         col.Item().PaddingTop(20);
 
-                        // Professional Styled Items Table
                         col.Item().Table(table =>
                         {
                             table.ColumnsDefinition(columns =>
@@ -142,7 +152,6 @@ namespace Firefly.Infrastructure.Services
                                 columns.ConstantColumn(85);
                             });
 
-                            // Table Header with Dark Background
                             table.Header(header =>
                             {
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).Text("ACTIVITY DESCRIPTION").Bold().FontColor(Colors.White).FontSize(9);
@@ -152,7 +161,6 @@ namespace Firefly.Infrastructure.Services
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("AMOUNT").Bold().FontColor(Colors.White).FontSize(9);
                             });
 
-                            // Table Rows
                             bool alternate = false;
                             foreach (var item in q.Items)
                             {
@@ -170,7 +178,6 @@ namespace Firefly.Infrastructure.Services
 
                         col.Item().PaddingTop(20);
 
-                        // Payment Details & Totals Breakdown Section
                         col.Item().Row(row =>
                         {
                             row.RelativeItem().Column(c =>
@@ -222,7 +229,6 @@ namespace Firefly.Infrastructure.Services
                         });
                     });
 
-                    // Footer Page Numbering
                     page.Footer().AlignRight().Text(text =>
                     {
                         text.Span("Page ").FontSize(8).FontColor(Colors.Grey.Medium);

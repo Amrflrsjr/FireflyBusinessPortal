@@ -17,7 +17,7 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto);
         Task<bool> DeleteQuotationAsync(int id);
         Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id);
-        Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync();
+        Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync(string? search);
         Task<bool> RestoreQuotationAsync(int id);
         Task<bool> PermanentlyDeleteQuotationAsync(int id);
     }

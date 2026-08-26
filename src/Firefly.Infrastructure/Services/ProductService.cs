@@ -210,11 +210,24 @@ namespace Firefly.Infrastructure.Services
             return true;
         }
 
-        public async Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync()
+        public async Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync(string? search = null)
         {
-            return await _context.Products
+            var query = _context.Products
                 .Include(p => p.Variants)
                 .Where(p => !p.IsActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(p =>
+                    p.Name.ToLower().Contains(search) ||
+                    (!string.IsNullOrEmpty(p.Description) && p.Description.ToLower().Contains(search)) ||
+                    p.Variants.Any(v => v.SKU.ToLower().Contains(search))
+                );
+            }
+
+            return await query
                 .Select(p => new ProductResponseDto(
                     p.ProductId,
                     p.Name,

@@ -19,7 +19,8 @@ namespace Firefly.Application.Common.Interfaces
         Task<PaymentResponseDto?> RecordPaymentAsync(int invoiceId, RecordPaymentDto dto, string userId);
         Task<DocumentEmailPreviewDto?> GetEmailPreviewAsync(int id);
         Task<bool> DeleteInvoiceAsync(int id);
-        Task<IEnumerable<InvoiceResponseDto>> GetDeletedInvoicesAsync();
+        Task<IEnumerable<InvoiceResponseDto>> GetDeletedInvoicesAsync(string? search);
+        Task<bool> UpdateStatusAsync(int id, string status);
         Task<bool> RestoreInvoiceAsync(int id);
         Task<bool> PermanentlyDeleteInvoiceAsync(int id);
     }

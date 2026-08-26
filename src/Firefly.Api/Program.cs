@@ -1,14 +1,15 @@
-using System.Text;
 using Firefly.Application.Common.Interfaces;
+using Firefly.Application.Dashboard.Services;
 using Firefly.Domain.Entities;
 using Firefly.Infrastructure.Persistence;
 using Firefly.Infrastructure.Services;
-using QuestPDF.Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
+using QuestPDF.Infrastructure;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,6 +44,8 @@ builder.Services.AddScoped<IPdfService, PdfService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddScoped<ISearchService, SearchService>();
+
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // 4. Configure CORS for React Frontend
 builder.Services.AddCors(options =>

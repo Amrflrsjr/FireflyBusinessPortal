@@ -81,7 +81,7 @@ namespace Firefly.Api.Controllers
             if (quotation == null) return NotFound();
 
             var pdfBytes = pdfService.GenerateQuotationPdf(quotation);
-            return File(pdfBytes, "application/pdf", $"Estimate_{quotation.QuotationNumber}.pdf");
+            return File(pdfBytes, "application/pdf", $"Quotation_{quotation.QuotationNumber}.pdf");
         }
 
         [HttpGet("{id:int}/email-preview")]
@@ -119,9 +119,9 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet("deleted")]
-        public async Task<IActionResult> GetDeletedQuotations()
+        public async Task<IActionResult> GetDeletedQuotations([FromQuery] string? search)
         {
-            var deletedQuotations = await _quotationService.GetDeletedQuotationsAsync();
+            var deletedQuotations = await _quotationService.GetDeletedQuotationsAsync(search);
             return Ok(deletedQuotations);
         }
 
@@ -136,9 +136,16 @@ namespace Firefly.Api.Controllers
         [HttpDelete("{id:int}/permanent")]
         public async Task<IActionResult> PermanentlyDeleteQuotation(int id)
         {
-            bool result = await _quotationService.PermanentlyDeleteQuotationAsync(id);
-            if (!result) return NotFound();
-            return NoContent();
+            try
+            {
+                bool result = await _quotationService.PermanentlyDeleteQuotationAsync(id);
+                if (!result) return NotFound();
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
         }
     }
 }

@@ -1,6 +1,7 @@
 ﻿namespace Firefly.Application.Customers.Dtos
 {
     public record CreateCustomerDto(
+        string CustomerType, // "Business" or "Individual"
         string CompanyName,
         string CompanyAddress,
         string TIN,
@@ -17,6 +18,7 @@
 
     public record CustomerResponseDto(
         int CustomerId,
+        string CustomerType, // "Business" or "Individual"
         string CompanyName,
         string CompanyAddress,
         string TIN,

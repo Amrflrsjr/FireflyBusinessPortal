@@ -43,9 +43,20 @@ namespace Firefly.Api.Controllers
         [HttpPost("from-quotation")]
         public async Task<IActionResult> CreateFromQuotation([FromBody] CreateInvoiceFromQuotationDto dto)
         {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
-            var invoice = await _invoiceService.CreateInvoiceFromQuotationAsync(dto, userId);
-            return CreatedAtAction(nameof(GetById), new { id = invoice.InvoiceId }, invoice);
+            try
+            {
+                var userId = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "system";
+                var invoice = await _invoiceService.CreateInvoiceFromQuotationAsync(dto, userId);
+                return CreatedAtAction(nameof(GetById), new { id = invoice.InvoiceId }, invoice);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return NotFound(ex.Message);
+            }
         }
 
         [HttpDelete("{id:int}")]
@@ -107,10 +118,18 @@ namespace Firefly.Api.Controllers
             return Ok(new { message = "Invoice email sent successfully." });
         }
 
-        [HttpGet("deleted")]
-        public async Task<IActionResult> GetDeletedInvoices()
+        [HttpPatch("{id:int}/status")]
+        public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateInvoiceStatusDto dto)
         {
-            var deletedInvoices = await _invoiceService.GetDeletedInvoicesAsync();
+            var updated = await _invoiceService.UpdateStatusAsync(id, dto.Status);
+            if (!updated) return NotFound();
+            return NoContent();
+        }
+
+        [HttpGet("deleted")]
+        public async Task<IActionResult> GetDeletedInvoices([FromQuery] string? search)
+        {
+            var deletedInvoices = await _invoiceService.GetDeletedInvoicesAsync(search);
             return Ok(deletedInvoices);
         }
 

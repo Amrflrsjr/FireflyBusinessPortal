@@ -89,9 +89,9 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet("deleted")]
-        public async Task<IActionResult> GetDeletedCustomers()
+        public async Task<IActionResult> GetDeletedCustomers([FromQuery] string? search)
         {
-            var deletedCustomers = await _customerService.GetDeletedCustomersAsync();
+            var deletedCustomers = await _customerService.GetDeletedCustomersAsync(search);
             return Ok(deletedCustomers);
         }
 

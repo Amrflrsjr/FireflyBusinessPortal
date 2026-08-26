@@ -24,17 +24,19 @@ namespace Firefly.Infrastructure.Services
          bool ascending = true)
         {
             var query = _context.Quotations
-                .Include(q => q.Customer)
-                .Include(q => q.Items)
-                .Where(q => q.Status != "Cancelled")
-                .AsQueryable();
+            .Include(q => q.Customer)
+            .Include(q => q.Items)
+                .ThenInclude(i => i.ProductVariant!)
+                    .ThenInclude(v => v.Product)
+            .Where(q => !q.IsDeleted) // Decoupled: filters out soft-deleted items instead of status
+            .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
             {
                 search = search.ToLower();
                 query = query.Where(q =>
                     q.QuotationNumber.ToLower().Contains(search) ||
-                    q.Customer.CompanyName.ToLower().Contains(search) ||
+                    (q.Customer != null && q.Customer.CompanyName.ToLower().Contains(search)) ||
                     (!string.IsNullOrEmpty(q.ContactNameSnapshot) && q.ContactNameSnapshot.ToLower().Contains(search))
                 );
             }
@@ -65,11 +67,10 @@ namespace Firefly.Infrastructure.Services
                 query = query.Where(q => q.CreatedAt <= adjustedEndDate);
             }
 
-            // Apply dynamic sorting
             query = sortBy?.ToLower() switch
             {
                 "quotationnumber" => ascending ? query.OrderBy(q => q.QuotationNumber) : query.OrderByDescending(q => q.QuotationNumber),
-                "customer" => ascending ? query.OrderBy(q => q.Customer.CompanyName) : query.OrderByDescending(q => q.Customer.CompanyName),
+                "customer" => ascending ? query.OrderBy(q => q.Customer != null ? q.Customer.CompanyName : string.Empty) : query.OrderByDescending(q => q.Customer != null ? q.Customer.CompanyName : string.Empty),
                 "totalamount" => ascending ? query.OrderBy(q => q.TotalAmount) : query.OrderByDescending(q => q.TotalAmount),
                 "status" => ascending ? query.OrderBy(q => q.Status) : query.OrderByDescending(q => q.Status),
                 "createdat" or _ => ascending ? query.OrderBy(q => q.CreatedAt) : query.OrderByDescending(q => q.CreatedAt),
@@ -83,9 +84,11 @@ namespace Firefly.Infrastructure.Services
         public async Task<QuotationResponseDto?> GetQuotationByIdAsync(int id)
         {
             var q = await _context.Quotations
-                .Include(x => x.Customer)
-                .Include(x => x.Items)
-                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled");
+            .Include(x => x.Customer)
+            .Include(x => x.Items)
+                .ThenInclude(i => i.ProductVariant!)
+                    .ThenInclude(v => v.Product)
+            .FirstOrDefaultAsync(x => x.QuotationId == id && !x.IsDeleted);
 
             if (q == null) return null;
             return MapToDto(q);
@@ -199,12 +202,11 @@ namespace Firefly.Infrastructure.Services
             var quotation = await _context.Quotations
                 .Include(q => q.Items)
                 .Include(q => q.Customer)
-                .ThenInclude(c => c.Contacts)
-                .FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
+                .ThenInclude(c => c!.Contacts)
+                .FirstOrDefaultAsync(q => q.QuotationId == id && !q.IsDeleted);
 
             if (quotation == null) return false;
 
-            // Optional safety check: restrict edits to Draft/Created status if desired
             if (quotation.Status != "Created" && quotation.Status != "Draft")
             {
                 throw new InvalidOperationException("Only quotations in Created or Draft status can be edited.");
@@ -280,7 +282,6 @@ namespace Firefly.Infrastructure.Services
             quotation.VATAmount = vatAmount;
             quotation.TotalAmount = totalAmount;
 
-            // Remove old items and insert updated items list
             _context.QuotationItems.RemoveRange(quotation.Items);
             quotation.Items.Clear();
 
@@ -302,7 +303,7 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<bool> UpdateStatusAsync(int id, UpdateQuotationStatusDto dto)
         {
-            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
+            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && !q.IsDeleted);
             if (quotation == null) return false;
 
             quotation.Status = dto.Status;
@@ -312,10 +313,10 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<bool> DeleteQuotationAsync(int id)
         {
-            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && q.Status != "Cancelled");
+            var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && !q.IsDeleted);
             if (quotation == null) return false;
 
-            quotation.Status = "Cancelled";
+            quotation.IsDeleted = true; // Soft delete instead of changing status to Cancelled
             await _context.SaveChangesAsync();
             return true;
         }
@@ -327,6 +328,7 @@ namespace Firefly.Infrastructure.Services
                 q.QuotationNumber,
                 q.CustomerId,
                 q.Customer != null ? q.Customer.CompanyName : string.Empty,
+                q.Customer?.CompanyAddress ?? string.Empty,
                 q.ContactId,
                 q.ContactNameSnapshot,
                 q.ContactEmailSnapshot,
@@ -347,7 +349,7 @@ namespace Firefly.Infrastructure.Services
                     i.Quantity,
                     i.UnitPrice,
                     i.TotalAmount,
-                    i.ProductVariant != null ? i.ProductVariant.Product.Name : null,
+                    i.ProductVariant != null && i.ProductVariant.Product != null ? i.ProductVariant.Product.Name : null,
                     i.ProductVariant != null ? i.ProductVariant.SKU : null,
                     i.ProductVariant != null ? i.ProductVariant.Color : null,
                     i.ProductVariant != null ? i.ProductVariant.Size : null
@@ -359,7 +361,7 @@ namespace Firefly.Infrastructure.Services
         {
             var q = await _context.Quotations
                 .Include(x => x.Customer)
-                .FirstOrDefaultAsync(x => x.QuotationId == id && x.Status != "Cancelled");
+                .FirstOrDefaultAsync(x => x.QuotationId == id && !x.IsDeleted);
 
             if (q == null) return null;
 
@@ -370,7 +372,7 @@ namespace Firefly.Infrastructure.Services
                 : $"Quotation #{q.QuotationNumber}";
             string pdfFileName = $"Quotation_{q.QuotationNumber}.pdf";
 
-            string body = "";
+            string body = string.Empty;
 
             var recipients = new List<string>();
             if (!string.IsNullOrEmpty(q.ContactEmailSnapshot))
@@ -391,12 +393,26 @@ namespace Firefly.Infrastructure.Services
             );
         }
 
-        public async Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync()
+        public async Task<IEnumerable<QuotationResponseDto>> GetDeletedQuotationsAsync(string? search = null)
         {
-            return await _context.Quotations
+            var query = _context.Quotations
                 .Include(q => q.Customer)
                 .Include(q => q.Items)
-                .Where(q => q.Status == "Cancelled")
+                    .ThenInclude(i => i.ProductVariant!)
+                        .ThenInclude(v => v.Product)
+                .Where(q => q.IsDeleted) // Query actual soft-deleted items
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(q =>
+                    q.QuotationNumber.ToLower().Contains(search) ||
+                    (q.Customer != null && q.Customer.CompanyName.ToLower().Contains(search))
+                );
+            }
+
+            return await query
                 .OrderByDescending(q => q.CreatedAt)
                 .Select(q => MapToDto(q))
                 .ToListAsync();
@@ -406,17 +422,26 @@ namespace Firefly.Infrastructure.Services
         {
             var quotation = await _context.Quotations
                 .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(q => q.QuotationId == id && q.Status == "Cancelled");
+                .FirstOrDefaultAsync(q => q.QuotationId == id && q.IsDeleted);
 
             if (quotation == null) return false;
 
-            quotation.Status = "Created";
+            quotation.IsDeleted = false; // Restore from trash
             await _context.SaveChangesAsync();
             return true;
         }
 
         public async Task<bool> PermanentlyDeleteQuotationAsync(int id)
         {
+            var hasInvoice = await _context.Invoices
+                .IgnoreQueryFilters()
+                .AnyAsync(i => i.QuotationId == id);
+
+            if (hasInvoice)
+            {
+                throw new InvalidOperationException("Cannot permanently delete this quotation because an invoice has already been generated from it. Please delete or cancel the associated invoice first.");
+            }
+
             var quotation = await _context.Quotations
                 .Include(q => q.Items)
                 .IgnoreQueryFilters()

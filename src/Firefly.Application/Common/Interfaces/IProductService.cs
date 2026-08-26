@@ -12,7 +12,7 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateVariantAsync(int variantId, UpdateProductVariantDto dto);
         Task<bool> DeleteProductAsync(int id);
         Task<bool> DeleteVariantAsync(int variantId);
-        Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync();
+        Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync(string? search);
         Task<bool> RestoreProductAsync(int id);
         Task<bool> PermanentlyDeleteProductAsync(int id);
     }

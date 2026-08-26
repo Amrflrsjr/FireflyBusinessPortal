@@ -1,4 +1,6 @@
-﻿namespace Firefly.Application.Invoices.Dtos
+﻿using Firefly.Application.Quotations.Dtos;
+
+namespace Firefly.Application.Invoices.Dtos
 {
     public record CreateInvoiceFromQuotationDto(
         int QuotationId,
@@ -25,6 +27,10 @@
         DateTime CreatedAt
     );
 
+    public record UpdateInvoiceStatusDto(
+        string Status
+    );
+
     public record InvoiceResponseDto(
         int InvoiceId,
         string InvoiceNumber,
@@ -32,6 +38,7 @@
         string QuotationNumber,
         int CustomerId,
         string CompanyName,
+        string CompanyAddress,
         string ContactNameSnapshot,
         string ContactEmailSnapshot,
         DateTime IssueDate,
@@ -45,6 +52,7 @@
         decimal BalanceDue,
         string Notes,
         DateTime CreatedAt,
-        List<PaymentResponseDto> Payments
+        List<PaymentResponseDto> Payments,
+        List<QuotationItemResponseDto> Items
     );
 }

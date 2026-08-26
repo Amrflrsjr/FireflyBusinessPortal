@@ -49,6 +49,7 @@
         string QuotationNumber,
         int CustomerId,
         string CompanyName,
+        string CompanyAddress,
         int? ContactId,
         string ContactNameSnapshot,
         string ContactEmailSnapshot,

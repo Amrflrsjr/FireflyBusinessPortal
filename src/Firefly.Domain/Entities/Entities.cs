@@ -32,6 +32,7 @@ namespace Firefly.Domain.Entities
     {
         [Key]
         public int CustomerId { get; set; }
+        public string CustomerType { get; set; } = "Business";
         public string CompanyName { get; set; } = string.Empty;
         public string CompanyAddress { get; set; } = string.Empty;
         public string TIN { get; set; } = string.Empty;
@@ -99,7 +100,7 @@ namespace Firefly.Domain.Entities
         // Made Nullable (int?) so quotations without formal contact records won't break foreign keys
         public int? ContactId { get; set; }
         public CustomerContact? Contact { get; set; }
-
+        public bool IsDeleted { get; set; }
         public string ContactNameSnapshot { get; set; } = string.Empty;
         public string ContactEmailSnapshot { get; set; } = string.Empty;
         public string ContactPositionSnapshot { get; set; } = string.Empty;
@@ -149,7 +150,7 @@ namespace Firefly.Domain.Entities
         public Customer Customer { get; set; } = null!;
         public int? ContactId { get; set; }
         public CustomerContact? Contact { get; set; }
-
+        public bool IsDeleted { get; set; }
         public string ContactNameSnapshot { get; set; } = string.Empty;
         public string ContactEmailSnapshot { get; set; } = string.Empty;
         public string ContactPositionSnapshot { get; set; } = string.Empty;

@@ -43,6 +43,7 @@ namespace Firefly.Infrastructure.Services
             return await query
                 .Select(c => new CustomerResponseDto(
                     c.CustomerId,
+                    c.CustomerType,
                     c.CompanyName,
                     c.CompanyAddress,
                     c.TIN,
@@ -75,6 +76,7 @@ namespace Firefly.Infrastructure.Services
 
             return new CustomerResponseDto(
                 c.CustomerId,
+                c.CustomerType,
                 c.CompanyName,
                 c.CompanyAddress,
                 c.TIN,
@@ -98,12 +100,17 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<CustomerResponseDto> CreateCustomerAsync(CreateCustomerDto dto)
         {
+            string resolvedCompanyName = string.IsNullOrWhiteSpace(dto.CompanyName)
+                ? (dto.InitialContacts?.FirstOrDefault()?.Name ?? "Personal Account")
+                : dto.CompanyName;
+
             var customer = new Customer
             {
-                CompanyName = dto.CompanyName,
-                CompanyAddress = dto.CompanyAddress,
-                TIN = dto.TIN,
-                Notes = dto.Notes,
+                CustomerType = string.IsNullOrWhiteSpace(dto.CustomerType) ? "Business" : dto.CustomerType,
+                CompanyName = resolvedCompanyName,
+                CompanyAddress = dto.CompanyAddress ?? string.Empty,
+                TIN = dto.TIN ?? string.Empty,
+                Notes = dto.Notes ?? string.Empty,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -118,10 +125,10 @@ namespace Firefly.Infrastructure.Services
                     customer.Contacts.Add(new CustomerContact
                     {
                         Name = ct.Name,
-                        Department = ct.Department,
-                        Position = ct.Position,
-                        Email = ct.Email,
-                        Phone = ct.Phone,
+                        Department = ct.Department ?? string.Empty,
+                        Position = ct.Position ?? string.Empty,
+                        Email = ct.Email ?? string.Empty,
+                        Phone = ct.Phone ?? string.Empty,
                         IsPrimary = makePrimary,
                         IsActive = true
                     });
@@ -144,10 +151,10 @@ namespace Firefly.Infrastructure.Services
             var customer = await _context.Customers.FindAsync(id);
             if (customer == null) return false;
 
-            customer.CompanyName = dto.CompanyName;
-            customer.CompanyAddress = dto.CompanyAddress;
-            customer.TIN = dto.TIN;
-            customer.Notes = dto.Notes;
+            customer.CompanyName = string.IsNullOrWhiteSpace(dto.CompanyName) ? customer.CompanyName : dto.CompanyName;
+            customer.CompanyAddress = dto.CompanyAddress ?? string.Empty;
+            customer.TIN = dto.TIN ?? string.Empty;
+            customer.Notes = dto.Notes ?? string.Empty;
             customer.UpdatedAt = DateTime.UtcNow;
 
             await _context.SaveChangesAsync();
@@ -198,10 +205,10 @@ namespace Firefly.Infrastructure.Services
             {
                 CustomerId = customerId,
                 Name = dto.Name,
-                Department = dto.Department,
-                Position = dto.Position,
-                Email = dto.Email,
-                Phone = dto.Phone,
+                Department = dto.Department ?? string.Empty,
+                Position = dto.Position ?? string.Empty,
+                Email = dto.Email ?? string.Empty,
+                Phone = dto.Phone ?? string.Empty,
                 IsPrimary = isPrimary,
                 IsActive = true
             };
@@ -266,10 +273,10 @@ namespace Firefly.Infrastructure.Services
             }
 
             contact.Name = dto.Name;
-            contact.Department = dto.Department;
-            contact.Position = dto.Position;
-            contact.Email = dto.Email;
-            contact.Phone = dto.Phone;
+            contact.Department = dto.Department ?? string.Empty;
+            contact.Position = dto.Position ?? string.Empty;
+            contact.Email = dto.Email ?? string.Empty;
+            contact.Phone = dto.Phone ?? string.Empty;
             contact.IsPrimary = isPrimary;
             contact.IsActive = dto.IsActive;
 
@@ -277,13 +284,31 @@ namespace Firefly.Infrastructure.Services
             return true;
         }
 
-        public async Task<IEnumerable<CustomerResponseDto>> GetDeletedCustomersAsync()
+        public async Task<IEnumerable<CustomerResponseDto>> GetDeletedCustomersAsync(string? search = null)
         {
-            return await _context.Customers
+            var query = _context.Customers
                 .Include(c => c.Contacts)
                 .Where(c => !c.IsActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(c =>
+                    c.CompanyName.ToLower().Contains(search) ||
+                    (!string.IsNullOrEmpty(c.CompanyAddress) && c.CompanyAddress.ToLower().Contains(search)) ||
+                    (!string.IsNullOrEmpty(c.TIN) && c.TIN.ToLower().Contains(search)) ||
+                    c.Contacts.Any(ct =>
+                        ct.Name.ToLower().Contains(search) ||
+                        (!string.IsNullOrEmpty(ct.Email) && ct.Email.ToLower().Contains(search))
+                    )
+                );
+            }
+
+            return await query
                 .Select(c => new CustomerResponseDto(
                     c.CustomerId,
+                    c.CustomerType,
                     c.CompanyName,
                     c.CompanyAddress,
                     c.TIN,
@@ -332,6 +357,20 @@ namespace Firefly.Infrastructure.Services
                 .FirstOrDefaultAsync(c => c.CustomerId == id);
 
             if (customer == null) return false;
+
+            var contactIds = customer.Contacts.Select(c => c.ContactId).ToList();
+
+            if (contactIds.Any())
+            {
+                var relatedQuotations = await _context.Quotations
+                    .Where(q => q.ContactId.HasValue && contactIds.Contains(q.ContactId.Value))
+                    .ToListAsync();
+
+                foreach (var quotation in relatedQuotations)
+                {
+                    quotation.ContactId = null;
+                }
+            }
 
             _context.Customers.Remove(customer);
             await _context.SaveChangesAsync();
