@@ -182,6 +182,13 @@ namespace Firefly.Infrastructure.Services
                         {
                             row.RelativeItem().Column(c =>
                             {
+
+                                if (!string.IsNullOrWhiteSpace(q.NoteToCustomer))
+                                {
+                                    c.Item().Text(q.NoteToCustomer).FontSize(9).Bold();
+                                    c.Item().PaddingTop(10);
+                                }
+
                                 c.Item().Text("To proceed with this transaction, we require 50% downpayment.").FontSize(9);
                                 c.Item().PaddingTop(6);
                                 c.Item().Text("Bank: Metrobank").Bold().FontSize(9);

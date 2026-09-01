@@ -15,5 +15,9 @@ namespace Firefly.Application.Common.Interfaces
         Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync(string? search);
         Task<bool> RestoreProductAsync(int id);
         Task<bool> PermanentlyDeleteProductAsync(int id);
+
+        Task<IEnumerable<ProductVariantResponseDto>> GetDeletedVariantsAsync(string? search = null);
+        Task<bool> RestoreVariantAsync(int variantId);
+        Task<bool> PermanentlyDeleteVariantAsync(int variantId);
     }
 }

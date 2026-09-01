@@ -3,6 +3,7 @@ using Firefly.Application.Customers.Dtos;
 using Firefly.Domain.Entities;
 using Firefly.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
+using System.Text.RegularExpressions;
 
 namespace Firefly.Infrastructure.Services
 {
@@ -13,6 +14,25 @@ namespace Firefly.Infrastructure.Services
         public CustomerService(ApplicationDbContext context)
         {
             _context = context;
+        }
+
+        private string NormalizeCompanyName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return string.Empty;
+
+            string normalized = name.ToLower().Trim();
+
+            string[] stopWords = { "cebu", "inc", "corp", "corporation", "hotel", "philippines", "co", "the" };
+
+            foreach (var word in stopWords)
+            {
+                normalized = Regex.Replace(normalized, $@"\b{word}\b", "");
+            }
+
+            normalized = Regex.Replace(normalized, @"[^\w\s]", "");
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+
+            return normalized;
         }
 
         public async Task<IEnumerable<CustomerResponseDto>> GetAllCustomersAsync(string? search = null, string? sortBy = null, bool ascending = true)
@@ -100,13 +120,31 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<CustomerResponseDto> CreateCustomerAsync(CreateCustomerDto dto)
         {
+            string customerType = string.IsNullOrWhiteSpace(dto.CustomerType) ? "Business" : dto.CustomerType;
             string resolvedCompanyName = string.IsNullOrWhiteSpace(dto.CompanyName)
                 ? (dto.InitialContacts?.FirstOrDefault()?.Name ?? "Personal Account")
                 : dto.CompanyName;
 
+            // Check duplicate globally across all active customers (Business & Individual)
+            if (!string.IsNullOrWhiteSpace(resolvedCompanyName))
+            {
+                string incomingNormalized = NormalizeCompanyName(resolvedCompanyName);
+
+                var existingCustomers = await _context.Customers
+                    .Where(c => c.IsActive)
+                    .ToListAsync();
+
+                bool isDuplicate = existingCustomers.Any(c => NormalizeCompanyName(c.CompanyName) == incomingNormalized);
+
+                if (isDuplicate)
+                {
+                    throw new InvalidOperationException($"A customer or company named '{resolvedCompanyName}' already exists in your directory.");
+                }
+            }
+
             var customer = new Customer
             {
-                CustomerType = string.IsNullOrWhiteSpace(dto.CustomerType) ? "Business" : dto.CustomerType,
+                CustomerType = customerType,
                 CompanyName = resolvedCompanyName,
                 CompanyAddress = dto.CompanyAddress ?? string.Empty,
                 TIN = dto.TIN ?? string.Empty,
@@ -151,7 +189,25 @@ namespace Firefly.Infrastructure.Services
             var customer = await _context.Customers.FindAsync(id);
             if (customer == null) return false;
 
-            customer.CompanyName = string.IsNullOrWhiteSpace(dto.CompanyName) ? customer.CompanyName : dto.CompanyName;
+            string newCompanyName = string.IsNullOrWhiteSpace(dto.CompanyName) ? customer.CompanyName : dto.CompanyName;
+
+            if (!string.IsNullOrWhiteSpace(newCompanyName))
+            {
+                string incomingNormalized = NormalizeCompanyName(newCompanyName);
+
+                var existingCustomers = await _context.Customers
+                    .Where(c => c.CustomerId != id && c.IsActive)
+                    .ToListAsync();
+
+                bool isDuplicate = existingCustomers.Any(c => NormalizeCompanyName(c.CompanyName) == incomingNormalized);
+
+                if (isDuplicate)
+                {
+                    throw new InvalidOperationException($"A customer or company named '{newCompanyName}' already exists in your directory.");
+                }
+            }
+
+            customer.CompanyName = newCompanyName;
             customer.CompanyAddress = dto.CompanyAddress ?? string.Empty;
             customer.TIN = dto.TIN ?? string.Empty;
             customer.Notes = dto.Notes ?? string.Empty;

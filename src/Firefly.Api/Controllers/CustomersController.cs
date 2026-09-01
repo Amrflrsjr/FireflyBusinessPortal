@@ -39,16 +39,30 @@ namespace Firefly.Api.Controllers
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateCustomerDto dto)
         {
-            var customer = await _customerService.CreateCustomerAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = customer.CustomerId }, customer);
+            try
+            {
+                var customer = await _customerService.CreateCustomerAsync(dto);
+                return CreatedAtAction(nameof(GetById), new { id = customer.CustomerId }, customer);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpPut("{id:int}")]
         public async Task<IActionResult> Update(int id, [FromBody] UpdateCustomerDto dto)
         {
-            var updated = await _customerService.UpdateCustomerAsync(id, dto);
-            if (!updated) return NotFound();
-            return NoContent();
+            try
+            {
+                var updated = await _customerService.UpdateCustomerAsync(id, dto);
+                if (!updated) return NotFound();
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
 
         [HttpDelete("{id:int}")]

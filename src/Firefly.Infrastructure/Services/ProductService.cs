@@ -19,7 +19,7 @@ namespace Firefly.Infrastructure.Services
         {
             var query = _context.Products
                 .Include(p => p.Variants)
-                .Where(p => p.IsActive)
+                .Where(p => !p.IsDeleted)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -29,11 +29,10 @@ namespace Firefly.Infrastructure.Services
                     p.ProductId.ToString() == search ||
                     p.Name.ToLower().Contains(search) ||
                     p.Description.ToLower().Contains(search) ||
-                    p.Variants.Any(v => v.SKU.ToLower().Contains(search))
+                    p.Variants.Any(v => v.IsActive && v.SKU.ToLower().Contains(search))
                 );
             }
 
-            // Apply dynamic sorting
             query = sortBy?.ToLower() switch
             {
                 "description" => ascending ? query.OrderBy(p => p.Description) : query.OrderByDescending(p => p.Description),
@@ -48,16 +47,18 @@ namespace Firefly.Infrastructure.Services
                     p.Description,
                     p.IsActive,
                     p.CreatedAt,
-                    p.Variants.Where(v => v.IsActive).Select(v => new ProductVariantResponseDto(
-                        v.ProductVariantId,
-                        v.ProductId,
-                        v.SKU,
-                        v.Color,
-                        v.Size,
-                        v.UnitPrice,
-                        v.Stock,
-                        v.IsActive
-                    )).ToList()
+                    p.Variants
+                        .Where(v => v.IsActive)
+                        .Select(v => new ProductVariantResponseDto(
+                            v.ProductVariantId,
+                            v.ProductId,
+                            v.SKU,
+                            v.Color,
+                            v.Size,
+                            v.UnitPrice,
+                            v.Stock,
+                            v.IsActive
+                        )).ToList()
                 ))
                 .ToListAsync();
         }
@@ -66,7 +67,7 @@ namespace Firefly.Infrastructure.Services
         {
             var p = await _context.Products
                 .Include(x => x.Variants)
-                .FirstOrDefaultAsync(x => x.ProductId == id && x.IsActive);
+                .FirstOrDefaultAsync(x => x.ProductId == id && !x.IsDeleted);
 
             if (p == null) return null;
 
@@ -76,17 +77,89 @@ namespace Firefly.Infrastructure.Services
                 p.Description,
                 p.IsActive,
                 p.CreatedAt,
-                p.Variants.Where(v => v.IsActive).Select(v => new ProductVariantResponseDto(
-                    v.ProductVariantId,
-                    v.ProductId,
-                    v.SKU,
-                    v.Color,
-                    v.Size,
-                    v.UnitPrice,
-                    v.Stock,
-                    v.IsActive
-                )).ToList()
+                p.Variants
+                    .Where(v => v.IsActive)
+                    .Select(v => new ProductVariantResponseDto(
+                        v.ProductVariantId,
+                        v.ProductId,
+                        v.SKU,
+                        v.Color,
+                        v.Size,
+                        v.UnitPrice,
+                        v.Stock,
+                        v.IsActive
+                    )).ToList()
             );
+        }
+
+        public async Task<bool> DeleteProductAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.ProductId == id && !p.IsDeleted);
+
+            if (product == null) return false;
+
+            product.IsDeleted = true;
+            product.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync(string? search = null)
+        {
+            var query = _context.Products
+                .Include(p => p.Variants)
+                .Where(p => p.IsDeleted)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(p =>
+                    p.Name.ToLower().Contains(search) ||
+                    (!string.IsNullOrEmpty(p.Description) && p.Description.ToLower().Contains(search)) ||
+                    p.Variants.Any(v => v.IsActive && v.SKU.ToLower().Contains(search))
+                );
+            }
+
+            return await query
+                .Select(p => new ProductResponseDto(
+                    p.ProductId,
+                    p.Name,
+                    p.Description,
+                    p.IsActive,
+                    p.CreatedAt,
+                    p.Variants
+                        .Where(v => v.IsActive)
+                        .Select(v => new ProductVariantResponseDto(
+                            v.ProductVariantId,
+                            v.ProductId,
+                            v.SKU,
+                            v.Color,
+                            v.Size,
+                            v.UnitPrice,
+                            v.Stock,
+                            v.IsActive
+                        )).ToList()
+                ))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreProductAsync(int id)
+        {
+            var product = await _context.Products
+                .Include(p => p.Variants)
+                .FirstOrDefaultAsync(p => p.ProductId == id && p.IsDeleted);
+
+            if (product == null) return false;
+
+            product.IsDeleted = false;
+            product.UpdatedAt = DateTime.UtcNow;
+
+            await _context.SaveChangesAsync();
+            return true;
         }
 
         public async Task<ProductResponseDto> CreateProductAsync(CreateProductDto dto)
@@ -96,6 +169,7 @@ namespace Firefly.Infrastructure.Services
                 Name = dto.Name,
                 Description = dto.Description,
                 IsActive = true,
+                IsDeleted = false,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -124,7 +198,7 @@ namespace Firefly.Infrastructure.Services
         public async Task<bool> UpdateProductAsync(int id, UpdateProductDto dto)
         {
             var product = await _context.Products.FindAsync(id);
-            if (product == null) return false;
+            if (product == null || product.IsDeleted) return false;
 
             product.Name = dto.Name;
             product.Description = dto.Description;
@@ -135,28 +209,10 @@ namespace Firefly.Infrastructure.Services
             return true;
         }
 
-        public async Task<bool> DeleteProductAsync(int id)
-        {
-            var product = await _context.Products
-                .Include(p => p.Variants)
-                .FirstOrDefaultAsync(p => p.ProductId == id && p.IsActive);
-
-            if (product == null) return false;
-
-            product.IsActive = false;
-            foreach (var variant in product.Variants)
-            {
-                variant.IsActive = false;
-            }
-
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
         public async Task<ProductVariantResponseDto?> AddVariantAsync(int productId, CreateProductVariantDto dto)
         {
             var product = await _context.Products.FindAsync(productId);
-            if (product == null) return null;
+            if (product == null || product.IsDeleted) return null;
 
             var variant = new ProductVariant
             {
@@ -202,67 +258,10 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<bool> DeleteVariantAsync(int variantId)
         {
-            var variant = await _context.ProductVariants.FirstOrDefaultAsync(v => v.ProductVariantId == variantId && v.IsActive);
-            if (variant == null) return false;
+            var variant = await _context.ProductVariants.FindAsync(variantId);
+            if (variant == null || !variant.IsActive) return false;
 
             variant.IsActive = false;
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<IEnumerable<ProductResponseDto>> GetDeletedProductsAsync(string? search = null)
-        {
-            var query = _context.Products
-                .Include(p => p.Variants)
-                .Where(p => !p.IsActive)
-                .AsQueryable();
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                search = search.ToLower();
-                query = query.Where(p =>
-                    p.Name.ToLower().Contains(search) ||
-                    (!string.IsNullOrEmpty(p.Description) && p.Description.ToLower().Contains(search)) ||
-                    p.Variants.Any(v => v.SKU.ToLower().Contains(search))
-                );
-            }
-
-            return await query
-                .Select(p => new ProductResponseDto(
-                    p.ProductId,
-                    p.Name,
-                    p.Description,
-                    p.IsActive,
-                    p.CreatedAt,
-                    p.Variants.Select(v => new ProductVariantResponseDto(
-                        v.ProductVariantId,
-                        v.ProductId,
-                        v.SKU,
-                        v.Color,
-                        v.Size,
-                        v.UnitPrice,
-                        v.Stock,
-                        v.IsActive
-                    )).ToList()
-                ))
-                .ToListAsync();
-        }
-
-        public async Task<bool> RestoreProductAsync(int id)
-        {
-            var product = await _context.Products
-                .Include(p => p.Variants)
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(p => p.ProductId == id);
-
-            if (product == null) return false;
-
-            product.IsActive = true;
-            foreach (var variant in product.Variants)
-            {
-                variant.IsActive = true;
-            }
-
             await _context.SaveChangesAsync();
             return true;
         }
@@ -271,12 +270,73 @@ namespace Firefly.Infrastructure.Services
         {
             var product = await _context.Products
                 .Include(p => p.Variants)
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(p => p.ProductId == id);
+                .FirstOrDefaultAsync(p => p.ProductId == id && p.IsDeleted);
 
             if (product == null) return false;
 
             _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<IEnumerable<ProductVariantResponseDto>> GetDeletedVariantsAsync(string? search = null)
+        {
+            var query = _context.ProductVariants
+                .Where(v => !v.IsActive)
+                .AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(search))
+            {
+                search = search.ToLower();
+                query = query.Where(v =>
+                    v.ProductVariantId.ToString() == search ||
+                    v.SKU.ToLower().Contains(search) ||
+                    v.Color.ToLower().Contains(search) ||
+                    v.Size.ToLower().Contains(search)
+                );
+            }
+
+            return await query
+                .Select(v => new ProductVariantResponseDto(
+                    v.ProductVariantId,
+                    v.ProductId,
+                    v.SKU,
+                    v.Color,
+                    v.Size,
+                    v.UnitPrice,
+                    v.Stock,
+                    v.IsActive
+                ))
+                .ToListAsync();
+        }
+
+        public async Task<bool> RestoreVariantAsync(int variantId)
+        {
+            var variant = await _context.ProductVariants
+                .Include(v => v.Product)
+                .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+
+            if (variant == null) return false;
+
+            variant.IsActive = true;
+
+            if (variant.Product != null && variant.Product.IsDeleted)
+            {
+                variant.Product.IsDeleted = false;
+                variant.Product.IsActive = true;
+                variant.Product.UpdatedAt = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteVariantAsync(int variantId)
+        {
+            var variant = await _context.ProductVariants.FindAsync(variantId);
+            if (variant == null) return false;
+
+            _context.ProductVariants.Remove(variant);
             await _context.SaveChangesAsync();
             return true;
         }

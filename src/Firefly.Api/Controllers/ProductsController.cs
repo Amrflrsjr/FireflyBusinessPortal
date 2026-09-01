@@ -104,5 +104,28 @@ namespace Firefly.Api.Controllers
             if (!result) return NotFound();
             return NoContent();
         }
+
+        [HttpGet("variants/deleted")]
+        public async Task<IActionResult> GetDeletedVariants([FromQuery] string? search)
+        {
+            var deletedVariants = await _productService.GetDeletedVariantsAsync(search);
+            return Ok(deletedVariants);
+        }
+
+        [HttpPost("variants/{variantId:int}/restore")]
+        public async Task<IActionResult> RestoreVariant(int variantId)
+        {
+            bool result = await _productService.RestoreVariantAsync(variantId);
+            if (!result) return NotFound();
+            return NoContent();
+        }
+
+        [HttpDelete("variants/{variantId:int}/permanent")]
+        public async Task<IActionResult> PermanentlyDeleteVariant(int variantId)
+        {
+            bool result = await _productService.PermanentlyDeleteVariantAsync(variantId);
+            if (!result) return NotFound();
+            return NoContent();
+        }
     }
 }
