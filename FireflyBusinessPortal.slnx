@@ -1,15 +1,23 @@
 <Solution>
   <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
     <File Path="docker-compose.yml" />
+    <File Path="Dockerfile" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Firefly.Api/Firefly.Api.csproj" />
-    <Project Path="src/Firefly.Application/Firefly.Application.csproj" />
-    <Project Path="src/Firefly.Domain/Firefly.Domain.csproj" />
-    <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj" />
+    <Project Path="src/Firefly.Application/Firefly.Application.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
+    <Project Path="src/Firefly.Domain/Firefly.Domain.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
+    <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj">
+      <Build Solution="Debug|*" Project="false" />
+    </Project>
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
-    <Project Path="tests/Firefly.UnitTests/Firefly.UnitTests.csproj" />
+    <Project Path="../../../FireflyBusinessPortal/tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
+    <Project Path="../../../FireflyBusinessPortal/tests/Firefly.UnitTests/Firefly.UnitTests.csproj" />
   </Folder>
 </Solution>
