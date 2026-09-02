@@ -1,3 +1,6 @@
+using Amazon;
+using Amazon.SecretsManager;
+using Amazon.SecretsManager.Model;
 using Firefly.Application.Common.Interfaces;
 using Firefly.Application.Dashboard.Services;
 using Firefly.Domain.Entities;
@@ -10,8 +13,40 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using QuestPDF.Infrastructure;
 using System.Text;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// AWS SECRETS MANAGER INTEGRATION
+if (builder.Environment.IsProduction())
+{
+    using var client = new AmazonSecretsManagerClient(RegionEndpoint.APSoutheast1);
+    var request = new GetSecretValueRequest { SecretId = "Prod/AppSecrets" };
+    var response = client.GetSecretValueAsync(request).GetAwaiter().GetResult();
+
+    if (!string.IsNullOrEmpty(response.SecretString))
+    {
+        var trimmedSecret = response.SecretString.Trim();
+        if (trimmedSecret.StartsWith("{"))
+        {
+            using var doc = JsonDocument.Parse(trimmedSecret);
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                var key = prop.Name.Replace("__", ":");
+                var value = prop.Value.ValueKind == JsonValueKind.String
+                    ? prop.Value.GetString()
+                    : prop.Value.GetRawText();
+
+                builder.Configuration[key] = value;
+            }
+        }
+        else
+        {
+            // Fallback for plain connection string format
+            builder.Configuration["ConnectionStrings:DefaultConnection"] = trimmedSecret;
+        }
+    }
+}
 
 // 1. DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -32,19 +67,13 @@ QuestPDF.Settings.License = LicenseType.Community;
 
 // 3. Register Application Services
 builder.Services.AddScoped<ITokenService, TokenService>();
-
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
-
 builder.Services.AddScoped<IQuotationService, QuotationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
-
 builder.Services.AddScoped<IPdfService, PdfService>();
-
 builder.Services.AddScoped<IEmailService, EmailService>();
-
 builder.Services.AddScoped<ISearchService, SearchService>();
-
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 
 // 4. Configure CORS for React Frontend
@@ -52,14 +81,23 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowReactApp", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "http://localhost:3000")
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "https://dcq3l24ktbbtk.cloudfront.net",
+                "https://fireflycraftsph.com",
+                "https://www.fireflycraftsph.com",
+                "https://portal.fireflycraftsph.com"
+              )
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials(); // Required if passing cookie/bearer auth context
     });
 });
 
 // 5. JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"]!;
+var jwtKey = builder.Configuration["Jwt:Key"]
+    ?? throw new InvalidOperationException("Jwt:Key configuration is missing.");
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -91,7 +129,6 @@ builder.Services.AddSwaggerGen(options =>
         Version = "v1"
     });
 
-    // Define Bearer Auth Scheme
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Name = "Authorization",
@@ -102,7 +139,6 @@ builder.Services.AddSwaggerGen(options =>
         BearerFormat = "JWT"
     });
 
-    // Pass requirement via Func<OpenApiDocument, OpenApiSecurityRequirement>
     options.AddSecurityRequirement(doc => new OpenApiSecurityRequirement
     {
         {
@@ -126,18 +162,21 @@ using (var scope = app.Services.CreateScope())
     await DbInitializer.SeedAsync(userManager, roleManager);
 }
 
+app.UseStaticFiles();
+
 // 8. Configure HTTP Request Pipeline
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Firefly Business Portal API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseCors("AllowReactApp");
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapControllers();
+
+app.MapGet("/", () => Results.Ok("Healthy"));
 
 app.Run();

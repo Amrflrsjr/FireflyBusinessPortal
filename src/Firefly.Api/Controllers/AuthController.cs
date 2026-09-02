@@ -1,5 +1,7 @@
-﻿using Firefly.Application.Common.Interfaces;
+﻿using Firefly.Application.Auth.Dtos;
+using Firefly.Application.Common.Interfaces;
 using Firefly.Domain.Entities;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
@@ -36,6 +38,33 @@ namespace Firefly.Api.Controllers
             var token = _tokenService.GenerateJwtToken(user.Id, user.UserName!, user.Email!, roles);
 
             return Ok(new LoginResponse(token, user.Id, user.UserName!, roles));
+        }
+
+        [HttpPost("register")]
+        [Authorize]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+        {
+            var userExists = await _userManager.FindByNameAsync(request.Username);
+            if (userExists != null)
+                return BadRequest(new { message = "Username is already taken" });
+
+            var user = new ApplicationUser
+            {
+                UserName = request.Username,
+                Email = request.Email,
+                FullName = request.FullName,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+
+            var result = await _userManager.CreateAsync(user, request.Password);
+            if (!result.Succeeded)
+            {
+                var errors = result.Errors.Select(e => e.Description);
+                return BadRequest(new { message = "User creation failed", errors });
+            }
+
+            return Ok(new { message = "User registered successfully" });
         }
     }
 }
