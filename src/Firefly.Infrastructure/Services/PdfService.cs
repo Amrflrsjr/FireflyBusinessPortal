@@ -169,7 +169,7 @@ namespace Firefly.Infrastructure.Services
                                 table.Cell().Background(bgColor).Padding(6).Text(item.Description).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.Quantity.ToString()).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.UnitPrice:N2}").FontSize(9);
-                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text(q.VATType.Contains("Inclusive") || q.VATType.Contains("Exclusive") ? "12% S" : "0%").FontSize(9);
+                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text(q.VATType.Contains("Inclusive") || q.VATType.Contains("Exclusive") ? "12%" : "0%").FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.TotalAmount:N2}").FontSize(9);
 
                                 alternate = !alternate;
