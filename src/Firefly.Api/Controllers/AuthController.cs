@@ -47,59 +47,5 @@ namespace Firefly.Api.Controllers
 
             return Ok(new LoginResponse(token, user.Id, user.UserName!, roles));
         }
-
-        [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
-        {
-            // Debug log to container console
-            var userClaims = User.Claims.Select(c => $"{c.Type}: {c.Value}");
-            Console.WriteLine($"[AUTH DEBUG] User Claims: {string.Join(" | ", userClaims)}");
-
-            // 1. Basic Field Validations
-            if (string.IsNullOrWhiteSpace(request.Username) || string.IsNullOrWhiteSpace(request.Password))
-                return BadRequest(new { message = "Username and password are required" });
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-                return BadRequest(new { message = "Email address is required" });
-
-            // 2. Normalize and check for existing Username
-            var normalizedUsername = request.Username.Trim();
-            var userExists = await _userManager.FindByNameAsync(normalizedUsername);
-            if (userExists != null)
-                return BadRequest(new { message = "Username is already taken" });
-
-            // 3. Normalize and check for existing Email (Case-Insensitive)
-            var normalizedEmail = request.Email.Trim().ToLowerInvariant();
-            var emailExists = await _userManager.FindByEmailAsync(normalizedEmail);
-            if (emailExists != null)
-                return BadRequest(new { message = "Email address is already in use" });
-
-            var user = new ApplicationUser
-            {
-                UserName = normalizedUsername,
-                Email = normalizedEmail,
-                FullName = request.FullName?.Trim(),
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            var result = await _userManager.CreateAsync(user, request.Password);
-            if (!result.Succeeded)
-            {
-                var errors = result.Errors.Select(e => e.Description);
-                return BadRequest(new { message = "User creation failed", errors });
-            }
-
-            // 4. Ensure requested role exists in identity database before assigning
-            var roleToAssign = string.IsNullOrWhiteSpace(request.Role) ? "User" : request.Role.Trim();
-            if (!await _roleManager.RoleExistsAsync(roleToAssign))
-            {
-                await _roleManager.CreateAsync(new IdentityRole(roleToAssign));
-            }
-
-            await _userManager.AddToRoleAsync(user, roleToAssign);
-
-            return Ok(new { message = $"User registered successfully with role '{roleToAssign}'" });
-        }
     }
 }

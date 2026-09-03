@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/.github/" />
+  <Folder Name="/.github/workflows/">
+    <File Path="deploy.yml" />
+  </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".dockerignore" />
     <File Path="docker-compose.yml" />
@@ -6,15 +10,9 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Firefly.Api/Firefly.Api.csproj" />
-    <Project Path="src/Firefly.Application/Firefly.Application.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
-    <Project Path="src/Firefly.Domain/Firefly.Domain.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
-    <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj">
-      <Build Solution="Debug|*" Project="false" />
-    </Project>
+    <Project Path="src/Firefly.Application/Firefly.Application.csproj" />
+    <Project Path="src/Firefly.Domain/Firefly.Domain.csproj" />
+    <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="../../../FireflyBusinessPortal/tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
