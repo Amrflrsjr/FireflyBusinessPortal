@@ -147,17 +147,15 @@ namespace Firefly.Infrastructure.Services
                             {
                                 columns.RelativeColumn(3);
                                 columns.ConstantColumn(40);
-                                columns.ConstantColumn(75);
-                                columns.ConstantColumn(60);
-                                columns.ConstantColumn(85);
+                                columns.ConstantColumn(90);
+                                columns.ConstantColumn(95);
                             });
 
                             table.Header(header =>
                             {
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).Text("ACTIVITY DESCRIPTION").Bold().FontColor(Colors.White).FontSize(9);
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("QTY").Bold().FontColor(Colors.White).FontSize(9);
-                                header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("RATE").Bold().FontColor(Colors.White).FontSize(9);
-                                header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("TAX").Bold().FontColor(Colors.White).FontSize(9);
+                                header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("RATE (INCL. TAX)").Bold().FontColor(Colors.White).FontSize(9);
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("AMOUNT").Bold().FontColor(Colors.White).FontSize(9);
                             });
 
@@ -165,11 +163,11 @@ namespace Firefly.Infrastructure.Services
                             foreach (var item in q.Items)
                             {
                                 var bgColor = alternate ? Colors.Grey.Lighten4 : Colors.White;
+                                decimal unitPriceWithTax = q.VATType != null && q.VATType.Contains("Exclusive") ? item.UnitPrice * 1.12m : item.UnitPrice;
 
                                 table.Cell().Background(bgColor).Padding(6).Text(item.Description).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.Quantity.ToString()).FontSize(9);
-                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.UnitPrice:N2}").FontSize(9);
-                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text(q.VATType.Contains("Inclusive") || q.VATType.Contains("Exclusive") ? "12%" : "0%").FontSize(9);
+                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{unitPriceWithTax:N2}").FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.TotalAmount:N2}").FontSize(9);
 
                                 alternate = !alternate;
@@ -182,7 +180,6 @@ namespace Firefly.Infrastructure.Services
                         {
                             row.RelativeItem().Column(c =>
                             {
-
                                 if (!string.IsNullOrWhiteSpace(q.NoteToCustomer))
                                 {
                                     c.Item().Text(q.NoteToCustomer).FontSize(9).Bold();
