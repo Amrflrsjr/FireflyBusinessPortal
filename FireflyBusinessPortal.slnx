@@ -15,7 +15,7 @@
     <Project Path="src/Firefly.Infrastructure/Firefly.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="../../../FireflyBusinessPortal/tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
-    <Project Path="../../../FireflyBusinessPortal/tests/Firefly.UnitTests/Firefly.UnitTests.csproj" />
+    <Project Path="tests/Firefly.IntegrationTests/Firefly.IntegrationTests.csproj" />
+    <Project Path="tests/Firefly.UnitTests/Firefly.UnitTests.csproj" />
   </Folder>
 </Solution>
