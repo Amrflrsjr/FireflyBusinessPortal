@@ -46,7 +46,11 @@ namespace Firefly.Api.Controllers
 
                 try
                 {
-                    var s3Client = new AmazonS3Client(awsAccessKey, awsSecretKey, Amazon.RegionEndpoint.GetBySystemName(regionName));
+                    var region = !string.IsNullOrEmpty(regionName)
+                        ? Amazon.RegionEndpoint.GetBySystemName(regionName)
+                        : Amazon.RegionEndpoint.APSoutheast1;
+
+                    var s3Client = new AmazonS3Client(region);
 
                     // Normalize the object key (strip out any full domain prefix if previously stored)
                     var objectKey = user.ProfilePictureUrl.StartsWith("http")
@@ -105,8 +109,11 @@ namespace Firefly.Api.Controllers
                 var bucketName = configuration["AWS:BucketName"];
                 var regionName = configuration["AWS:Region"];
 
-                var region = Amazon.RegionEndpoint.GetBySystemName(regionName);
-                var s3Client = new AmazonS3Client(awsAccessKey, awsSecretKey, region);
+                var region = !string.IsNullOrEmpty(regionName)
+                    ? Amazon.RegionEndpoint.GetBySystemName(regionName)
+                    : Amazon.RegionEndpoint.APSoutheast1;
+
+                var s3Client = new AmazonS3Client(region);
                 var fileTransferUtility = new TransferUtility(s3Client);
 
                 var fileName = $"avatars/{Guid.NewGuid()}_{Path.GetFileName(profilePicture.FileName)}";

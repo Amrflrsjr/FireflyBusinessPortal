@@ -5,8 +5,8 @@ on:
     branches: [ "main" ]
 
 permissions:
-      id-token: write
-      contents: read
+  id-token: write
+  contents: read
 
 jobs:
   deploy:
@@ -37,6 +37,25 @@ jobs:
           docker build --no-cache -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
 
-      - name: Force ECS Service Update
+      - name: Download current task definition
         run: |
-          aws ecs update-service --cluster firefly-cluster --service firefly-api-service --force-new-deployment --region ap-southeast-1
+          aws ecs describe-task-definition --task-definition firefly-api-task --region ap-southeast-1 --query taskDefinition > task-definition.json
+
+      - name: Render Amazon ECS task definition
+        id: render-task
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: firefly-api
+          image: ${{ steps.login-ecr.outputs.registry }}/firefly-api:latest
+          environment-variables: |
+            AWS__BucketName=fireflycraftsph-portal
+            AWS__Region=ap-southeast-1
+
+      - name: Deploy Amazon ECS task definition
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render-task.outputs.task-definition }}
+          service: firefly-api-service
+          cluster: firefly-cluster
+          wait-for-service-stability: true
