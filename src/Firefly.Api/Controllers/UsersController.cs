@@ -45,6 +45,7 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpPut("me")]
+        [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateCurrentUser([FromForm] UpdateUserDto dto, IFormFile? profilePicture)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
