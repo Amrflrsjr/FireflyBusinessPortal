@@ -12,5 +12,24 @@ services:
     volumes:
       - firefly_postgres_data:/var/lib/postgresql/data
 
+  api:
+    build:
+      context: .
+      dockerfile: src/Firefly.Api/Dockerfile
+    image: firefly-api:latest
+    container_name: firefly-api
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=firefly_db;Username=firefly;Password=firefly_dev_password;Port=5432
+      - AWS__AccessKey=${AWS_ACCESS_KEY}
+      - AWS__SecretKey=${AWS_SECRET_KEY}
+      - AWS__BucketName=fireflycraftsph-portal
+      - AWS__Region=ap-southeast-1
+    depends_on:
+      - postgres
+
 volumes:
   firefly_postgres_data:
