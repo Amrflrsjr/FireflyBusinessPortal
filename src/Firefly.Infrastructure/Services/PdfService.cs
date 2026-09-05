@@ -39,10 +39,11 @@ namespace Firefly.Infrastructure.Services
                 invoice.CustomerId,
                 invoice.CompanyName,
                 invoice.CompanyAddress,
+                string.Empty, // TIN
                 null,
                 invoice.ContactNameSnapshot,
                 invoice.ContactEmailSnapshot,
-                string.Empty,
+                string.Empty, // ContactPositionSnapshot
                 invoice.IssueDate,
                 invoice.DueDate,
                 invoice.VATType,
@@ -126,16 +127,26 @@ namespace Firefly.Infrastructure.Services
                         {
                             row.RelativeItem().Column(c =>
                             {
-                                c.Item().Text("ADDRESS").Bold().FontSize(9).FontColor(Colors.Grey.Medium);
-                                c.Item().Text(string.IsNullOrWhiteSpace(q.CompanyAddress) ? "N/A" : q.CompanyAddress).Bold();
-                                c.Item().Text(q.ContactNameSnapshot);
-                            });
+                                c.Item().Text($"{documentTitle} FOR:").Bold().FontSize(9).FontColor(Colors.Grey.Medium);
 
-                            row.RelativeItem().Column(c =>
-                            {
-                                c.Item().Text("SHIP TO").Bold().FontSize(9).FontColor(Colors.Grey.Medium);
-                                c.Item().Text(q.CompanyName).Bold();
-                                c.Item().Text(q.ContactNameSnapshot);
+                                string companyName = string.IsNullOrWhiteSpace(q.CompanyName) ? "N/A" : q.CompanyName.Trim();
+                                string contactName = string.IsNullOrWhiteSpace(q.ContactNameSnapshot) ? string.Empty : q.ContactNameSnapshot.Trim();
+                                bool isSameName = string.Equals(companyName, contactName, StringComparison.OrdinalIgnoreCase);
+
+                                c.Item().Text(companyName).Bold();
+
+                                if (!isSameName && !string.IsNullOrEmpty(contactName))
+                                {
+                                    c.Item().Text($"{contactName}").FontSize(9).FontColor(Colors.Grey.Darken2);
+                                }
+
+                                if (!string.IsNullOrWhiteSpace(q.TIN))
+                                {
+                                    c.Item().Text($"TIN: {q.TIN}").FontSize(9).FontColor(Colors.Grey.Darken1);
+                                }
+
+                                string address = string.IsNullOrWhiteSpace(q.CompanyAddress) ? "N/A" : q.CompanyAddress.Trim();
+                                c.Item().Text(address).FontSize(9);
                             });
                         });
 
@@ -203,7 +214,7 @@ namespace Firefly.Infrastructure.Services
                                         s.Item().Text("Accepted By: ___________________________").FontSize(9);
                                     });
                                     sig.RelativeItem().Column(s => {
-                                        s.Item().Text($"Accepted Date: {DateTime.Now:MM/dd/yyyy}").FontSize(9);
+                                        s.Item().Text("Accepted Date: ___________________________").FontSize(9);
                                     });
                                 });
                             });

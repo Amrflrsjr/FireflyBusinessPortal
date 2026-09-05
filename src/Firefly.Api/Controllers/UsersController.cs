@@ -37,6 +37,7 @@ namespace Firefly.Api.Controllers
                 user.UserName!,
                 user.Email!,
                 user.FullName,
+                user.ProfilePictureUrl ?? string.Empty,
                 user.IsActive,
                 roles,
                 user.CreatedAt
@@ -44,7 +45,7 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpPut("me")]
-        public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto dto)
+        public async Task<IActionResult> UpdateCurrentUser([FromForm] UpdateUserDto dto, IFormFile? profilePicture)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Invalid token claims." });
@@ -54,13 +55,33 @@ namespace Firefly.Api.Controllers
 
             user.FullName = dto.FullName?.Trim() ?? user.FullName;
             user.Email = dto.Email?.Trim().ToLowerInvariant() ?? user.Email;
-            user.UpdatedAt = DateTime.UtcNow;
 
+            if (profilePicture != null && profilePicture.Length > 0)
+            {
+                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
+                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+                var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileName(profilePicture.FileName)}";
+                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+
+                using (var stream = new FileStream(filePath, FileMode.Create))
+                {
+                    await profilePicture.CopyToAsync(stream);
+                }
+
+                user.ProfilePictureUrl = $"/uploads/avatars/{uniqueFileName}";
+            }
+            else if (!string.IsNullOrEmpty(dto.ProfilePictureUrl))
+            {
+                user.ProfilePictureUrl = dto.ProfilePictureUrl;
+            }
+
+            user.UpdatedAt = DateTime.UtcNow;
             var updateResult = await _userManager.UpdateAsync(user);
             if (!updateResult.Succeeded)
                 return BadRequest(new { message = "Failed to update profile", errors = updateResult.Errors.Select(e => e.Description) });
 
-            return Ok(new { message = "Profile updated successfully" });
+            return Ok(new { message = "Profile updated successfully", profilePictureUrl = user.ProfilePictureUrl });
         }
 
         [HttpGet]
@@ -78,6 +99,7 @@ namespace Firefly.Api.Controllers
                     user.UserName!,
                     user.Email!,
                     user.FullName,
+                    user.ProfilePictureUrl ?? string.Empty,
                     user.IsActive,
                     roles,
                     user.CreatedAt
@@ -100,6 +122,7 @@ namespace Firefly.Api.Controllers
                 user.UserName!,
                 user.Email!,
                 user.FullName,
+                user.ProfilePictureUrl ?? string.Empty,
                 user.IsActive,
                 roles,
                 user.CreatedAt
@@ -110,14 +133,12 @@ namespace Firefly.Api.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
         {
-            if (string.IsNullOrWhiteSpace(dto.Username) || string.IsNullOrWhiteSpace(dto.Password))
-                return BadRequest(new { message = "Username and password are required" });
-
             var user = new ApplicationUser
             {
                 UserName = dto.Username.Trim(),
                 Email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty,
                 FullName = dto.FullName?.Trim() ?? string.Empty,
+                ProfilePictureUrl = dto.ProfilePictureUrl?.Trim() ?? string.Empty,
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -133,7 +154,6 @@ namespace Firefly.Api.Controllers
             }
 
             await _userManager.AddToRoleAsync(user, role);
-
             return Ok(new { message = "User created successfully" });
         }
 
@@ -146,6 +166,7 @@ namespace Firefly.Api.Controllers
 
             user.FullName = dto.FullName?.Trim() ?? user.FullName;
             user.Email = dto.Email?.Trim().ToLowerInvariant() ?? user.Email;
+            user.ProfilePictureUrl = dto.ProfilePictureUrl?.Trim() ?? user.ProfilePictureUrl;
             user.IsActive = dto.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
 

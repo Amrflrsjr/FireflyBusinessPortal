@@ -119,10 +119,8 @@ namespace Firefly.Infrastructure.Services
 
             try
             {
-                var todayPrefix = $"INV-{DateTime.UtcNow:yyyyMMdd}";
-                var countToday = await _context.Invoices
-                    .CountAsync(i => i.InvoiceNumber.StartsWith(todayPrefix));
-                var invoiceNumber = $"{todayPrefix}-{(countToday + 1):D4}";
+                // Use the quotation number directly for the invoice number
+                var invoiceNumber = quotation.QuotationNumber;
 
                 var invoice = new Invoice
                 {

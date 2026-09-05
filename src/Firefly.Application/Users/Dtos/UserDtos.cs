@@ -5,6 +5,7 @@
         string Username,
         string Email,
         string FullName,
+        string ProfilePictureUrl,
         bool IsActive,
         IEnumerable<string> Roles,
         DateTime CreatedAt
@@ -15,12 +16,14 @@
         string Email,
         string Password,
         string FullName,
+        string ProfilePictureUrl,
         string Role
     );
 
     public record UpdateUserDto(
         string FullName,
         string Email,
+        string? ProfilePictureUrl,
         string Role,
         bool IsActive
     );

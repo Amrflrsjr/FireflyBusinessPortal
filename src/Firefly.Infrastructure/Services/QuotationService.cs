@@ -28,7 +28,7 @@ namespace Firefly.Infrastructure.Services
             .Include(q => q.Items)
                 .ThenInclude(i => i.ProductVariant!)
                     .ThenInclude(v => v.Product)
-            .Where(q => !q.IsDeleted) // Decoupled: filters out soft-deleted items instead of status
+            .Where(q => !q.IsDeleted) // Decoupled: filters out soft-deleted items instead of status[cite: 11]
             .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -154,10 +154,10 @@ namespace Firefly.Infrastructure.Services
                     break;
             }
 
-            var todayPrefix = $"QT-{DateTime.UtcNow:yyyyMMdd}";
+            var monthYearPrefix = DateTime.UtcNow.ToString("MMyy");
             var countToday = await _context.Quotations
-                .CountAsync(q => q.QuotationNumber.StartsWith(todayPrefix));
-            var quotationNumber = $"{todayPrefix}-{(countToday + 1):D4}";
+                .CountAsync(q => q.QuotationNumber.StartsWith(monthYearPrefix));
+            var quotationNumber = $"{monthYearPrefix}-{(countToday + 1):D5}";
 
             var quotation = new Quotation
             {
@@ -169,7 +169,7 @@ namespace Firefly.Infrastructure.Services
                 ContactPositionSnapshot = contactPosition,
                 DateGenerated = DateTime.UtcNow,
                 ValidUntil = dto.ValidUntil != default ? dto.ValidUntil : DateTime.UtcNow.AddDays(7),
-                VATType = dto.VATType,
+                VATType = dto.VATType ?? "Exclusive",
                 Status = !string.IsNullOrWhiteSpace(dto.Status) ? dto.Status : "Created",
                 NoteToCustomer = dto.NoteToCustomer,
                 PreparedByFK = userId,
@@ -276,7 +276,7 @@ namespace Firefly.Infrastructure.Services
             quotation.ContactEmailSnapshot = contactEmail;
             quotation.ContactPositionSnapshot = contactPosition;
             quotation.ValidUntil = dto.ValidUntil;
-            quotation.VATType = dto.VATType;
+            quotation.VATType = dto.VATType ?? "Exclusive";
             quotation.NoteToCustomer = dto.NoteToCustomer;
             quotation.Subtotal = subtotal;
             quotation.VATAmount = vatAmount;
@@ -316,7 +316,7 @@ namespace Firefly.Infrastructure.Services
             var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && !q.IsDeleted);
             if (quotation == null) return false;
 
-            quotation.IsDeleted = true; // Soft delete instead of changing status to Cancelled
+            quotation.IsDeleted = true; // Soft delete instead of changing status to Cancelled[cite: 11]
             await _context.SaveChangesAsync();
             return true;
         }
@@ -329,6 +329,7 @@ namespace Firefly.Infrastructure.Services
                 q.CustomerId,
                 q.Customer != null ? q.Customer.CompanyName : string.Empty,
                 q.Customer?.CompanyAddress ?? string.Empty,
+                q.Customer?.TIN ?? string.Empty,
                 q.ContactId,
                 q.ContactNameSnapshot,
                 q.ContactEmailSnapshot,
@@ -370,7 +371,7 @@ namespace Firefly.Infrastructure.Services
             string subject = !string.IsNullOrWhiteSpace(settings?.PaymentOptions)
                 ? $"Quotation #{q.QuotationNumber} - {q.Customer?.CompanyName}"
                 : $"Quotation #{q.QuotationNumber}";
-            string pdfFileName = $"Quotation_{q.QuotationNumber}.pdf";
+            string pdfFileName = $"Quotation_#{q.QuotationNumber}.pdf";
 
             string body = string.Empty;
 
@@ -400,7 +401,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(q => q.Items)
                     .ThenInclude(i => i.ProductVariant!)
                         .ThenInclude(v => v.Product)
-                .Where(q => q.IsDeleted) // Query actual soft-deleted items
+                .Where(q => q.IsDeleted) // Query actual soft-deleted items[cite: 11]
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -426,7 +427,7 @@ namespace Firefly.Infrastructure.Services
 
             if (quotation == null) return false;
 
-            quotation.IsDeleted = false; // Restore from trash
+            quotation.IsDeleted = false; // Restore from trash[cite: 11]
             await _context.SaveChangesAsync();
             return true;
         }

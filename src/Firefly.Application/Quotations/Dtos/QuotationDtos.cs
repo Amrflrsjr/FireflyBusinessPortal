@@ -50,6 +50,7 @@
         int CustomerId,
         string CompanyName,
         string CompanyAddress,
+        string TIN,
         int? ContactId,
         string ContactNameSnapshot,
         string ContactEmailSnapshot,
