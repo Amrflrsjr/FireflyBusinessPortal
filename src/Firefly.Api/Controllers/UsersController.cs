@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Amazon.S3;
+using Amazon.S3.Transfer;
+using Microsoft.Extensions.Configuration;
 
 namespace Firefly.Api.Controllers
 {
@@ -23,7 +26,7 @@ namespace Firefly.Api.Controllers
         }
 
         [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUser()
+        public async Task<IActionResult> GetCurrentUser([FromServices] IConfiguration configuration)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Invalid token claims." });
@@ -31,13 +34,48 @@ namespace Firefly.Api.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
+            string pictureUrl = user.ProfilePictureUrl ?? string.Empty;
+
+            // If a profile picture path exists, generate a temporary pre-signed URL valid for 2 hours
+            if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+            {
+                var awsAccessKey = configuration["AWS:AccessKey"];
+                var awsSecretKey = configuration["AWS:SecretKey"];
+                var bucketName = configuration["AWS:BucketName"];
+                var regionName = configuration["AWS:Region"];
+
+                try
+                {
+                    var s3Client = new AmazonS3Client(awsAccessKey, awsSecretKey, Amazon.RegionEndpoint.GetBySystemName(regionName));
+
+                    // Normalize the object key (strip out any full domain prefix if previously stored)
+                    var objectKey = user.ProfilePictureUrl.StartsWith("http")
+                        ? new Uri(user.ProfilePictureUrl).AbsolutePath.TrimStart('/')
+                        : user.ProfilePictureUrl.TrimStart('/');
+
+                    var request = new Amazon.S3.Model.GetPreSignedUrlRequest
+                    {
+                        BucketName = bucketName,
+                        Key = objectKey,
+                        Expires = DateTime.UtcNow.AddHours(2)
+                    };
+
+                    pictureUrl = s3Client.GetPreSignedURL(request);
+                }
+                catch
+                {
+                    // Fallback to stored string if pre-signing fails
+                    pictureUrl = user.ProfilePictureUrl;
+                }
+            }
+
             var roles = await _userManager.GetRolesAsync(user);
             return Ok(new UserResponseDto(
                 user.Id,
                 user.UserName!,
                 user.Email!,
                 user.FullName,
-                user.ProfilePictureUrl ?? string.Empty,
+                pictureUrl,
                 user.IsActive,
                 roles,
                 user.CreatedAt
@@ -46,7 +84,10 @@ namespace Firefly.Api.Controllers
 
         [HttpPut("me")]
         [Consumes("multipart/form-data")]
-        public async Task<IActionResult> UpdateCurrentUser([FromForm] UpdateUserDto dto, IFormFile? profilePicture)
+        public async Task<IActionResult> UpdateCurrentUser(
+            [FromForm] UpdateUserDto dto,
+            IFormFile? profilePicture,
+            [FromServices] IConfiguration configuration)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Invalid token claims." });
@@ -59,18 +100,31 @@ namespace Firefly.Api.Controllers
 
             if (profilePicture != null && profilePicture.Length > 0)
             {
-                var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
-                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+                var awsAccessKey = configuration["AWS:AccessKey"];
+                var awsSecretKey = configuration["AWS:SecretKey"];
+                var bucketName = configuration["AWS:BucketName"];
+                var regionName = configuration["AWS:Region"];
 
-                var uniqueFileName = $"{Guid.NewGuid()}_{Path.GetFileName(profilePicture.FileName)}";
-                var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+                var region = Amazon.RegionEndpoint.GetBySystemName(regionName);
+                var s3Client = new AmazonS3Client(awsAccessKey, awsSecretKey, region);
+                var fileTransferUtility = new TransferUtility(s3Client);
 
-                using (var stream = new FileStream(filePath, FileMode.Create))
+                var fileName = $"avatars/{Guid.NewGuid()}_{Path.GetFileName(profilePicture.FileName)}";
+
+                using (var stream = profilePicture.OpenReadStream())
                 {
-                    await profilePicture.CopyToAsync(stream);
+                    var uploadRequest = new TransferUtilityUploadRequest
+                    {
+                        InputStream = stream,
+                        Key = fileName,
+                        BucketName = bucketName
+                    };
+
+                    await fileTransferUtility.UploadAsync(uploadRequest);
                 }
 
-                user.ProfilePictureUrl = $"/uploads/avatars/{uniqueFileName}";
+                // Save only the relative object key in the database (e.g., "avatars/guid_filename.jpg")
+                user.ProfilePictureUrl = fileName;
             }
             else if (!string.IsNullOrEmpty(dto.ProfilePictureUrl))
             {
