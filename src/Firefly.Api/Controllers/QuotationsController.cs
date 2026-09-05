@@ -81,7 +81,7 @@ namespace Firefly.Api.Controllers
             if (quotation == null) return NotFound();
 
             var pdfBytes = pdfService.GenerateQuotationPdf(quotation);
-            return File(pdfBytes, "application/pdf", $"Quotation_{quotation.QuotationNumber}.pdf");
+            return File(pdfBytes, "application/pdf", $"QT_{quotation.QuotationNumber}.pdf");
         }
 
         [HttpGet("{id:int}/email-preview")]

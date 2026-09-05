@@ -83,7 +83,7 @@ namespace Firefly.Api.Controllers
             if (invoice == null) return NotFound();
 
             var pdfBytes = pdfService.GenerateInvoicePdf(invoice);
-            return File(pdfBytes, "application/pdf", $"Invoice_{invoice.InvoiceNumber}.pdf");
+            return File(pdfBytes, "application/pdf", $"INV_{invoice.InvoiceNumber}.pdf");
         }
 
         [HttpGet("{id:int}/email-preview")]
