@@ -176,7 +176,25 @@ namespace Firefly.Infrastructure.Services
                                 var bgColor = alternate ? Colors.Grey.Lighten4 : Colors.White;
                                 decimal unitPriceWithTax = q.VATType != null && q.VATType.Contains("Exclusive") ? item.UnitPrice * 1.12m : item.UnitPrice;
 
-                                table.Cell().Background(bgColor).Padding(6).Text(item.Description).FontSize(9);
+                                // Combine or choose item properties to show name, SKU, and variant clearly
+                                string itemDisplayText = !string.IsNullOrWhiteSpace(item.ProductName)
+                                    ? item.ProductName
+                                    : item.Description;
+
+                                if (!string.IsNullOrWhiteSpace(item.Color) || !string.IsNullOrWhiteSpace(item.Size))
+                                {
+                                    itemDisplayText += $" ({item.Color} / {item.Size})";
+                                }
+
+                                table.Cell().Background(bgColor).Padding(6).Column(column =>
+                                {
+                                    column.Item().Text(itemDisplayText).Bold().FontSize(9);
+                                    if (!string.IsNullOrWhiteSpace(item.SKU))
+                                    {
+                                        column.Item().Text($"SKU: {item.SKU}").FontSize(8).FontColor(Colors.Grey.Medium);
+                                    }
+                                });
+
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.Quantity.ToString()).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{unitPriceWithTax:N2}").FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.TotalAmount:N2}").FontSize(9);
