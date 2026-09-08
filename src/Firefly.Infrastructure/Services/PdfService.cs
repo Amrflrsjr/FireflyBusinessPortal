@@ -145,7 +145,7 @@ namespace Firefly.Infrastructure.Services
                                     c.Item().Text($"TIN: {q.TIN}").FontSize(9).FontColor(Colors.Grey.Darken1);
                                 }
 
-                                string address = string.IsNullOrWhiteSpace(q.CompanyAddress) ? "N/A" : q.CompanyAddress.Trim();
+                                string address = string.IsNullOrWhiteSpace(q.CompanyAddress) ? " " : q.CompanyAddress.Trim();
                                 c.Item().Text(address).FontSize(9);
                             });
                         });
@@ -166,7 +166,7 @@ namespace Firefly.Infrastructure.Services
                             {
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).Text("ACTIVITY DESCRIPTION").Bold().FontColor(Colors.White).FontSize(9);
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("QTY").Bold().FontColor(Colors.White).FontSize(9);
-                                header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("RATE (INCL. TAX)").Bold().FontColor(Colors.White).FontSize(9);
+                                header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("RATE").Bold().FontColor(Colors.White).FontSize(9);
                                 header.Cell().Background(Colors.Grey.Darken3).Padding(6).AlignRight().Text("AMOUNT").Bold().FontColor(Colors.White).FontSize(9);
                             });
 
@@ -181,9 +181,13 @@ namespace Firefly.Infrastructure.Services
                                     ? item.ProductName
                                     : item.Description;
 
-                                if (!string.IsNullOrWhiteSpace(item.Color) || !string.IsNullOrWhiteSpace(item.Size))
+                                var variantParts = new[] { item.Color?.Trim(), item.Size?.Trim() }
+                                .Where(p => !string.IsNullOrEmpty(p))
+                                .ToArray();
+
+                                if (variantParts.Length > 0)
                                 {
-                                    itemDisplayText += $" ({item.Color} / {item.Size})";
+                                    itemDisplayText += $" ({string.Join(" / ", variantParts)})";
                                 }
 
                                 table.Cell().Background(bgColor).Padding(6).Column(column =>
