@@ -18,15 +18,68 @@ namespace Firefly.Api.Controllers
     {
         private readonly UserManager<ApplicationUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
+        private readonly IConfiguration _configuration;
 
-        public UsersController(UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager)
+        public UsersController(
+            UserManager<ApplicationUser> userManager,
+            RoleManager<IdentityRole> roleManager,
+            IConfiguration configuration)
         {
             _userManager = userManager;
             _roleManager = roleManager;
+            _configuration = configuration;
+        }
+
+        private AmazonS3Client CreateS3Client()
+        {
+            var regionName = _configuration["AWS:Region"];
+            var region = !string.IsNullOrEmpty(regionName)
+                ? Amazon.RegionEndpoint.GetBySystemName(regionName)
+                : Amazon.RegionEndpoint.APSoutheast1;
+
+            var awsAccessKey = _configuration["AWS:AccessKey"];
+            var awsSecretKey = _configuration["AWS:SecretKey"];
+
+            if (!string.IsNullOrEmpty(awsAccessKey) && !string.IsNullOrEmpty(awsSecretKey))
+            {
+                return new AmazonS3Client(awsAccessKey, awsSecretKey, region);
+            }
+
+            return new AmazonS3Client(region);
+        }
+
+        private string GetPreSignedProfilePictureUrl(string? profilePictureUrl)
+        {
+            if (string.IsNullOrEmpty(profilePictureUrl)) return string.Empty;
+
+            try
+            {
+                var bucketName = _configuration["AWS:BucketName"];
+                var s3Client = CreateS3Client();
+
+                // Normalize the object key (strip out any full domain prefix if previously stored)
+                var objectKey = profilePictureUrl.StartsWith("http")
+                    ? new Uri(profilePictureUrl).AbsolutePath.TrimStart('/')
+                    : profilePictureUrl.TrimStart('/');
+
+                var request = new Amazon.S3.Model.GetPreSignedUrlRequest
+                {
+                    BucketName = bucketName,
+                    Key = objectKey,
+                    Expires = DateTime.UtcNow.AddHours(2)
+                };
+
+                return s3Client.GetPreSignedURL(request);
+            }
+            catch
+            {
+                // Fallback to stored string if pre-signing fails
+                return profilePictureUrl;
+            }
         }
 
         [HttpGet("me")]
-        public async Task<IActionResult> GetCurrentUser([FromServices] IConfiguration configuration)
+        public async Task<IActionResult> GetCurrentUser()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Invalid token claims." });
@@ -34,44 +87,7 @@ namespace Firefly.Api.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
-            string pictureUrl = user.ProfilePictureUrl ?? string.Empty;
-
-            // If a profile picture path exists, generate a temporary pre-signed URL valid for 2 hours
-            if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
-            {
-                var awsAccessKey = configuration["AWS:AccessKey"];
-                var awsSecretKey = configuration["AWS:SecretKey"];
-                var bucketName = configuration["AWS:BucketName"];
-                var regionName = configuration["AWS:Region"];
-
-                try
-                {
-                    var region = !string.IsNullOrEmpty(regionName)
-                        ? Amazon.RegionEndpoint.GetBySystemName(regionName)
-                        : Amazon.RegionEndpoint.APSoutheast1;
-
-                    var s3Client = new AmazonS3Client(region);
-
-                    // Normalize the object key (strip out any full domain prefix if previously stored)
-                    var objectKey = user.ProfilePictureUrl.StartsWith("http")
-                        ? new Uri(user.ProfilePictureUrl).AbsolutePath.TrimStart('/')
-                        : user.ProfilePictureUrl.TrimStart('/');
-
-                    var request = new Amazon.S3.Model.GetPreSignedUrlRequest
-                    {
-                        BucketName = bucketName,
-                        Key = objectKey,
-                        Expires = DateTime.UtcNow.AddHours(2)
-                    };
-
-                    pictureUrl = s3Client.GetPreSignedURL(request);
-                }
-                catch
-                {
-                    // Fallback to stored string if pre-signing fails
-                    pictureUrl = user.ProfilePictureUrl;
-                }
-            }
+            var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
 
             var roles = await _userManager.GetRolesAsync(user);
             return Ok(new UserResponseDto(
@@ -90,8 +106,7 @@ namespace Firefly.Api.Controllers
         [Consumes("multipart/form-data")]
         public async Task<IActionResult> UpdateCurrentUser(
             [FromForm] UpdateUserDto dto,
-            IFormFile? profilePicture,
-            [FromServices] IConfiguration configuration)
+            IFormFile? profilePicture)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Unauthorized(new { message = "Invalid token claims." });
@@ -104,16 +119,8 @@ namespace Firefly.Api.Controllers
 
             if (profilePicture != null && profilePicture.Length > 0)
             {
-                var awsAccessKey = configuration["AWS:AccessKey"];
-                var awsSecretKey = configuration["AWS:SecretKey"];
-                var bucketName = configuration["AWS:BucketName"];
-                var regionName = configuration["AWS:Region"];
-
-                var region = !string.IsNullOrEmpty(regionName)
-                    ? Amazon.RegionEndpoint.GetBySystemName(regionName)
-                    : Amazon.RegionEndpoint.APSoutheast1;
-
-                var s3Client = new AmazonS3Client(region);
+                var bucketName = _configuration["AWS:BucketName"];
+                var s3Client = CreateS3Client();
                 var fileTransferUtility = new TransferUtility(s3Client);
 
                 // Sanitize the file name to strip out spaces and encoded characters (e.g., %20)
@@ -148,7 +155,9 @@ namespace Firefly.Api.Controllers
             if (!updateResult.Succeeded)
                 return BadRequest(new { message = "Failed to update profile", errors = updateResult.Errors.Select(e => e.Description) });
 
-            return Ok(new { message = "Profile updated successfully", profilePictureUrl = user.ProfilePictureUrl });
+            var updatedPictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+
+            return Ok(new { message = "Profile updated successfully", profilePictureUrl = updatedPictureUrl });
         }
 
         [HttpGet]
@@ -161,12 +170,14 @@ namespace Firefly.Api.Controllers
             foreach (var user in users)
             {
                 var roles = await _userManager.GetRolesAsync(user);
+                var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+
                 userList.Add(new UserResponseDto(
                     user.Id,
                     user.UserName!,
                     user.Email!,
                     user.FullName,
-                    user.ProfilePictureUrl ?? string.Empty,
+                    pictureUrl,
                     user.IsActive,
                     roles,
                     user.CreatedAt
@@ -184,12 +195,14 @@ namespace Firefly.Api.Controllers
             if (user == null) return NotFound(new { message = "User not found" });
 
             var roles = await _userManager.GetRolesAsync(user);
+            var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+
             return Ok(new UserResponseDto(
                 user.Id,
                 user.UserName!,
                 user.Email!,
                 user.FullName,
-                user.ProfilePictureUrl ?? string.Empty,
+                pictureUrl,
                 user.IsActive,
                 roles,
                 user.CreatedAt
