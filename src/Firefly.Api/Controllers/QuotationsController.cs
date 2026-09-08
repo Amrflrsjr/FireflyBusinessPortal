@@ -110,7 +110,7 @@ namespace Firefly.Api.Controllers
                 dto.Subject,
                 dto.Body,
                 pdfBytes,
-                $"Estimate_{quotation.QuotationNumber}.pdf"
+                $"Quotation_{quotation.QuotationNumber}.pdf"
             );
 
             await _quotationService.UpdateStatusAsync(id, new UpdateQuotationStatusDto("Sent"));

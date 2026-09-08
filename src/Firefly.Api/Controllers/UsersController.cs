@@ -116,7 +116,12 @@ namespace Firefly.Api.Controllers
                 var s3Client = new AmazonS3Client(region);
                 var fileTransferUtility = new TransferUtility(s3Client);
 
-                var fileName = $"avatars/{Guid.NewGuid()}_{Path.GetFileName(profilePicture.FileName)}";
+                // Sanitize the file name to strip out spaces and encoded characters (e.g., %20)
+                var cleanFileName = Path.GetFileName(profilePicture.FileName)
+                    .Replace(" ", "_")
+                    .Replace("%20", "_");
+
+                var fileName = $"avatars/{Guid.NewGuid()}_{cleanFileName}";
 
                 using (var stream = profilePicture.OpenReadStream())
                 {
@@ -130,7 +135,7 @@ namespace Firefly.Api.Controllers
                     await fileTransferUtility.UploadAsync(uploadRequest);
                 }
 
-                // Save only the relative object key in the database (e.g., "avatars/guid_filename.jpg")
+                // Save only the clean relative object key in the database
                 user.ProfilePictureUrl = fileName;
             }
             else if (!string.IsNullOrEmpty(dto.ProfilePictureUrl))

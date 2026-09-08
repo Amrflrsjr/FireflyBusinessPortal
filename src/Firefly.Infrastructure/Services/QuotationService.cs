@@ -371,7 +371,7 @@ namespace Firefly.Infrastructure.Services
             string subject = !string.IsNullOrWhiteSpace(settings?.PaymentOptions)
                 ? $"Quotation #{q.QuotationNumber} - {q.Customer?.CompanyName}"
                 : $"Quotation #{q.QuotationNumber}";
-            string pdfFileName = $"Quotation_#{q.QuotationNumber}.pdf";
+            string pdfFileName = $"Quotation_{q.QuotationNumber}.pdf";
 
             string body = string.Empty;
 
