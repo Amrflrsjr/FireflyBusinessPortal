@@ -175,23 +175,26 @@ namespace Firefly.Infrastructure.Services
                             {
                                 var bgColor = alternate ? Colors.Grey.Lighten4 : Colors.White;
 
-                                // Combine or choose item properties to show name, SKU, and variant clearly
-                                string itemDisplayText = !string.IsNullOrWhiteSpace(item.ProductName)
+                                // Use item.ProductName if available, otherwise fallback to item.Description
+                                string primaryText = !string.IsNullOrWhiteSpace(item.ProductName)
                                     ? item.ProductName
                                     : item.Description;
 
-                                var variantParts = new[] { item.Color?.Trim(), item.Size?.Trim() }
-                                .Where(p => !string.IsNullOrEmpty(p))
-                                .ToArray();
-
-                                if (variantParts.Length > 0)
-                                {
-                                    itemDisplayText += $" ({string.Join(" / ", variantParts)})";
-                                }
+                                // If both exist and description isn't just a duplicate of the product name, show both
+                                bool hasExtraDescription = !string.IsNullOrWhiteSpace(item.ProductName) &&
+                                                           !string.IsNullOrWhiteSpace(item.Description) &&
+                                                           !item.Description.Equals(item.ProductName, StringComparison.OrdinalIgnoreCase);
 
                                 table.Cell().Background(bgColor).Padding(6).Column(column =>
                                 {
-                                    column.Item().Text(itemDisplayText).Bold().FontSize(9);
+                                    column.Item().Text(primaryText).Bold().FontSize(9);
+
+                                    // Display secondary custom description/notes underneath if added by user
+                                    if (hasExtraDescription)
+                                    {
+                                        column.Item().Text(item.Description).FontSize(8).FontColor(Colors.Grey.Darken1);
+                                    }
+
                                     if (!string.IsNullOrWhiteSpace(item.SKU))
                                     {
                                         column.Item().Text($"SKU: {item.SKU}").FontSize(8).FontColor(Colors.Grey.Medium);
@@ -199,7 +202,6 @@ namespace Firefly.Infrastructure.Services
                                 });
 
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.Quantity.ToString()).FontSize(9);
-                                // Display base rate directly using item.UnitPrice
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.UnitPrice.ToString()).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.TotalAmount:N2}").FontSize(9);
 
@@ -215,6 +217,7 @@ namespace Firefly.Infrastructure.Services
                             {
                                 if (!string.IsNullOrWhiteSpace(q.NoteToCustomer))
                                 {
+                                    c.Item().Text("Note: ").FontSize(9);
                                     c.Item().Text(q.NoteToCustomer).FontSize(9).Bold();
                                     c.Item().PaddingTop(10);
                                 }

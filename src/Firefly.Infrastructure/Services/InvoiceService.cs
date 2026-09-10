@@ -17,6 +17,7 @@ namespace Firefly.Infrastructure.Services
         }
 
         public async Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync(
+        int? customerId = null, // Added parameter
         string? search = null,
         string? status = null,
         DateTime? startDate = null,
@@ -31,15 +32,21 @@ namespace Firefly.Infrastructure.Services
                 .Include(i => i.Items)
                     .ThenInclude(item => item.ProductVariant!)
                         .ThenInclude(v => v!.Product)
-                .Where(i => !i.IsDeleted) // Decoupled: filters out soft-deleted items instead of status
+                .Where(i => !i.IsDeleted)
                 .AsQueryable();
+
+            // Filter by customer ID if provided
+            if (customerId.HasValue)
+            {
+                query = query.Where(i => i.CustomerId == customerId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
                 var lowerSearch = search.ToLower();
                 query = query.Where(i =>
                     i.InvoiceNumber.ToLower().Contains(lowerSearch) ||
-                    (i.Quotation != null && i.Quotation.QuotationNumber.ToLower().Contains(lowerSearch)) || // Added quotation number search
+                    (i.Quotation != null && i.Quotation.QuotationNumber.ToLower().Contains(lowerSearch)) ||
                     (i.Quotation != null && i.Quotation.Customer != null && i.Quotation.Customer.CompanyName.ToLower().Contains(lowerSearch))
                 );
             }
@@ -119,7 +126,6 @@ namespace Firefly.Infrastructure.Services
 
             try
             {
-                // Use the quotation number directly for the invoice number
                 var invoiceNumber = quotation.QuotationNumber;
 
                 var invoice = new Invoice
@@ -174,7 +180,7 @@ namespace Firefly.Infrastructure.Services
             var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == id && !i.IsDeleted);
             if (invoice == null) return false;
 
-            invoice.IsDeleted = true; // Soft delete instead of changing status to Cancelled
+            invoice.IsDeleted = true;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -320,7 +326,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(i => i.Items)
                     .ThenInclude(item => item.ProductVariant!)
                         .ThenInclude(v => v!.Product)
-                .Where(i => i.IsDeleted) // Query actual soft-deleted items
+                .Where(i => i.IsDeleted)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -328,11 +334,10 @@ namespace Firefly.Infrastructure.Services
                 var lowerSearch = search.ToLower();
                 query = query.Where(i =>
                     i.InvoiceNumber.ToLower().Contains(lowerSearch) ||
-                    (i.Quotation != null && i.Quotation.QuotationNumber.ToLower().Contains(lowerSearch)) || // Added quotation number search
+                    (i.Quotation != null && i.Quotation.QuotationNumber.ToLower().Contains(lowerSearch)) ||
                     (i.Quotation != null && i.Quotation.Customer != null && i.Quotation.Customer.CompanyName.ToLower().Contains(lowerSearch))
                 );
             }
-            
 
             return await query
                 .OrderByDescending(i => i.CreatedAt)
@@ -358,7 +363,7 @@ namespace Firefly.Infrastructure.Services
 
             if (invoice == null) return false;
 
-            invoice.IsDeleted = false; // Restore from trash
+            invoice.IsDeleted = false;
             await _context.SaveChangesAsync();
             return true;
         }

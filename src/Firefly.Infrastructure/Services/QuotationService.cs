@@ -16,6 +16,7 @@ namespace Firefly.Infrastructure.Services
         }
 
         public async Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync(
+         int? customerId = null, // Added parameter
          string? search = null,
          string? status = null,
          DateTime? startDate = null,
@@ -28,8 +29,14 @@ namespace Firefly.Infrastructure.Services
             .Include(q => q.Items)
                 .ThenInclude(i => i.ProductVariant!)
                     .ThenInclude(v => v.Product)
-            .Where(q => !q.IsDeleted) // Decoupled: filters out soft-deleted items instead of status[cite: 11]
+            .Where(q => !q.IsDeleted)
             .AsQueryable();
+
+            // Filter by customer ID if provided
+            if (customerId.HasValue)
+            {
+                query = query.Where(q => q.CustomerId == customerId.Value);
+            }
 
             if (!string.IsNullOrWhiteSpace(search))
             {
@@ -41,13 +48,11 @@ namespace Firefly.Infrastructure.Services
                 );
             }
 
-            // Backend Status Filter
             if (!string.IsNullOrWhiteSpace(status) && status.ToLower() != "all")
             {
                 query = query.Where(q => q.Status.ToLower() == status.ToLower());
             }
 
-            // Backend Date Range Filters with UTC Kind adjustment
             if (startDate.HasValue)
             {
                 var startUtc = startDate.Value.Kind == DateTimeKind.Unspecified
@@ -316,7 +321,7 @@ namespace Firefly.Infrastructure.Services
             var quotation = await _context.Quotations.FirstOrDefaultAsync(q => q.QuotationId == id && !q.IsDeleted);
             if (quotation == null) return false;
 
-            quotation.IsDeleted = true; // Soft delete instead of changing status to Cancelled[cite: 11]
+            quotation.IsDeleted = true;
             await _context.SaveChangesAsync();
             return true;
         }
@@ -401,7 +406,7 @@ namespace Firefly.Infrastructure.Services
                 .Include(q => q.Items)
                     .ThenInclude(i => i.ProductVariant!)
                         .ThenInclude(v => v.Product)
-                .Where(q => q.IsDeleted) // Query actual soft-deleted items[cite: 11]
+                .Where(q => q.IsDeleted)
                 .AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(search))
@@ -427,7 +432,7 @@ namespace Firefly.Infrastructure.Services
 
             if (quotation == null) return false;
 
-            quotation.IsDeleted = false; // Restore from trash[cite: 11]
+            quotation.IsDeleted = false;
             await _context.SaveChangesAsync();
             return true;
         }

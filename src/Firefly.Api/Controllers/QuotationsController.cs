@@ -20,6 +20,7 @@ namespace Firefly.Api.Controllers
 
         [HttpGet]
         public async Task<IActionResult> GetAll(
+            [FromQuery] int? customerId,
             [FromQuery] string? search,
             [FromQuery] string? status,
             [FromQuery] DateTime? startDate,
@@ -27,7 +28,7 @@ namespace Firefly.Api.Controllers
             [FromQuery] string? sortBy,
             [FromQuery] bool ascending = true)
         {
-            var quotations = await _quotationService.GetAllQuotationsAsync(search, status, startDate, endDate, sortBy, ascending);
+            var quotations = await _quotationService.GetAllQuotationsAsync(customerId, search, status, startDate, endDate, sortBy, ascending);
             return Ok(quotations);
         }
 

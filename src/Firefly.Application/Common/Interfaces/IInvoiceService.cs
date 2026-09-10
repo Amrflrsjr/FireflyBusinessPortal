@@ -7,6 +7,7 @@ namespace Firefly.Application.Common.Interfaces
     public interface IInvoiceService
     {
         Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync(
+             int? customerId = null,
              string? search = null,
              string? status = null,
              DateTime? startDate = null,

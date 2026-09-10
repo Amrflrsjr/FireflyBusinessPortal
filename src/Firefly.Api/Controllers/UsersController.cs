@@ -48,16 +48,16 @@ namespace Firefly.Api.Controllers
             return new AmazonS3Client(region);
         }
 
-        private string GetPreSignedProfilePictureUrl(string? profilePictureUrl)
+        private string GetPublicProfilePictureUrl(string? profilePictureUrl)
         {
             if (string.IsNullOrEmpty(profilePictureUrl)) return string.Empty;
+            if (profilePictureUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase)) return profilePictureUrl;
 
             try
             {
                 var bucketName = _configuration["AWS:BucketName"];
-                var s3Client = CreateS3Client();
+                var region = _configuration["AWS:Region"] ?? "ap-southeast1";
 
-                // Strip out the full domain if a full URL was accidentally saved in the database
                 var objectKey = profilePictureUrl;
                 if (profilePictureUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {
@@ -65,21 +65,42 @@ namespace Firefly.Api.Controllers
                     objectKey = uri.AbsolutePath.TrimStart('/');
                 }
 
-                // URL-decode to safely handle any legacy spaces or %20 encoding
                 objectKey = Uri.UnescapeDataString(objectKey).TrimStart('/');
 
-                var request = new Amazon.S3.Model.GetPreSignedUrlRequest
-                {
-                    BucketName = bucketName,
-                    Key = objectKey,
-                    Expires = DateTime.UtcNow.AddHours(2)
-                };
-
-                return s3Client.GetPreSignedURL(request);
+                return $"https://{bucketName}.s3.{region}.amazonaws.com/{objectKey}";
             }
             catch
             {
                 return profilePictureUrl;
+            }
+        }
+
+        private async Task DeleteOldProfilePictureAsync(string? profilePictureUrl, AmazonS3Client s3Client, string? bucketName)
+        {
+            if (string.IsNullOrEmpty(profilePictureUrl) || string.IsNullOrEmpty(bucketName)) return;
+
+            try
+            {
+                var objectKey = profilePictureUrl;
+                if (profilePictureUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uri = new Uri(profilePictureUrl);
+                    objectKey = uri.AbsolutePath.TrimStart('/');
+                }
+
+                objectKey = Uri.UnescapeDataString(objectKey).TrimStart('/');
+
+                var deleteRequest = new Amazon.S3.Model.DeleteObjectRequest
+                {
+                    BucketName = bucketName,
+                    Key = objectKey
+                };
+
+                await s3Client.DeleteObjectAsync(deleteRequest);
+            }
+            catch
+            {
+                // Suppress deletion errors so profile updates don't fail if an old file is missing
             }
         }
 
@@ -92,7 +113,7 @@ namespace Firefly.Api.Controllers
             var user = await _userManager.FindByIdAsync(userId);
             if (user == null) return NotFound(new { message = "User not found" });
 
-            var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+            var pictureUrl = GetPublicProfilePictureUrl(user.ProfilePictureUrl);
 
             var roles = await _userManager.GetRolesAsync(user);
             return Ok(new UserResponseDto(
@@ -128,7 +149,13 @@ namespace Firefly.Api.Controllers
                 var s3Client = CreateS3Client();
                 var fileTransferUtility = new TransferUtility(s3Client);
 
-                // Sanitize the file name to strip out spaces and encoded characters (e.g., %20)
+                // Delete the old avatar from S3 to maintain a single photo per user
+                if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+                {
+                    await DeleteOldProfilePictureAsync(user.ProfilePictureUrl, s3Client, bucketName);
+                }
+
+                // Sanitize the file name to strip out spaces and encoded characters
                 var cleanFileName = Path.GetFileName(profilePicture.FileName)
                     .Replace(" ", "_")
                     .Replace("%20", "_");
@@ -141,7 +168,7 @@ namespace Firefly.Api.Controllers
                     {
                         InputStream = stream,
                         Key = fileName,
-                        BucketName = bucketName
+                        BucketName = bucketName ?? string.Empty
                     };
 
                     await fileTransferUtility.UploadAsync(uploadRequest);
@@ -155,7 +182,7 @@ namespace Firefly.Api.Controllers
             if (!updateResult.Succeeded)
                 return BadRequest(new { message = "Failed to update profile", errors = updateResult.Errors.Select(e => e.Description) });
 
-            var updatedPictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+            var updatedPictureUrl = GetPublicProfilePictureUrl(user.ProfilePictureUrl);
 
             return Ok(new { message = "Profile updated successfully", profilePictureUrl = updatedPictureUrl });
         }
@@ -170,7 +197,7 @@ namespace Firefly.Api.Controllers
             foreach (var user in users)
             {
                 var roles = await _userManager.GetRolesAsync(user);
-                var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+                var pictureUrl = GetPublicProfilePictureUrl(user.ProfilePictureUrl);
 
                 userList.Add(new UserResponseDto(
                     user.Id,
@@ -195,7 +222,7 @@ namespace Firefly.Api.Controllers
             if (user == null) return NotFound(new { message = "User not found" });
 
             var roles = await _userManager.GetRolesAsync(user);
-            var pictureUrl = GetPreSignedProfilePictureUrl(user.ProfilePictureUrl);
+            var pictureUrl = GetPublicProfilePictureUrl(user.ProfilePictureUrl);
 
             return Ok(new UserResponseDto(
                 user.Id,
@@ -255,6 +282,15 @@ namespace Firefly.Api.Controllers
 
             if (!string.IsNullOrWhiteSpace(dto.ProfilePictureUrl))
             {
+                var bucketName = _configuration["AWS:BucketName"];
+                var s3Client = CreateS3Client();
+
+                // Delete old photo if updating to a new path/URL
+                if (!string.IsNullOrEmpty(user.ProfilePictureUrl) && user.ProfilePictureUrl != dto.ProfilePictureUrl)
+                {
+                    await DeleteOldProfilePictureAsync(user.ProfilePictureUrl, s3Client, bucketName);
+                }
+
                 var cleanedUrl = dto.ProfilePictureUrl.Trim();
                 if (cleanedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {

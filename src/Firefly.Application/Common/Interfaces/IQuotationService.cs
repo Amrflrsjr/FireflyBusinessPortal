@@ -5,7 +5,9 @@ namespace Firefly.Application.Common.Interfaces
 {
     public interface IQuotationService
     {
-        Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync(string? search = null,
+        Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync(
+         int? customerId = null, 
+         string? search = null,
          string? status = null,
          DateTime? startDate = null,
          DateTime? endDate = null,
