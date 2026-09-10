@@ -50,8 +50,8 @@ namespace Firefly.Infrastructure.Services
                 }
             }
 
-            // Always CC xamaninipoc@gmail.com on every email sent
-            message.CC.Add("xamaninipoc@gmail.com");
+            // Always CC fireflycraftscebu@gmail.com on every email sent
+            message.CC.Add("fireflycraftscebu@gmail.com");
 
             using var stream = new MemoryStream(pdfAttachment);
             message.Attachments.Add(new Attachment(stream, fileName, "application/pdf"));

@@ -174,7 +174,6 @@ namespace Firefly.Infrastructure.Services
                             foreach (var item in q.Items)
                             {
                                 var bgColor = alternate ? Colors.Grey.Lighten4 : Colors.White;
-                                decimal unitPriceWithTax = q.VATType != null && q.VATType.Contains("Exclusive") ? item.UnitPrice * 1.12m : item.UnitPrice;
 
                                 // Combine or choose item properties to show name, SKU, and variant clearly
                                 string itemDisplayText = !string.IsNullOrWhiteSpace(item.ProductName)
@@ -200,7 +199,8 @@ namespace Firefly.Infrastructure.Services
                                 });
 
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.Quantity.ToString()).FontSize(9);
-                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{unitPriceWithTax:N2}").FontSize(9);
+                                // Display base rate directly using item.UnitPrice
+                                table.Cell().Background(bgColor).Padding(6).AlignRight().Text(item.UnitPrice.ToString()).FontSize(9);
                                 table.Cell().Background(bgColor).Padding(6).AlignRight().Text($"{item.TotalAmount:N2}").FontSize(9);
 
                                 alternate = !alternate;
