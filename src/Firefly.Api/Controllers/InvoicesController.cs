@@ -27,7 +27,8 @@ namespace Firefly.Api.Controllers
          [FromQuery] DateTime? startDate,
          [FromQuery] DateTime? endDate,
          [FromQuery] string? sortBy,
-         [FromQuery] bool ascending = true)
+         [FromQuery] bool ascending = true
+            )
         {
             var invoices = await _invoiceService.GetAllInvoicesAsync(customerId, search, status, startDate, endDate, sortBy, ascending);
             return Ok(invoices);

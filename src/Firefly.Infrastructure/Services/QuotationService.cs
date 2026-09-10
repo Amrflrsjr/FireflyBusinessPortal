@@ -16,13 +16,14 @@ namespace Firefly.Infrastructure.Services
         }
 
         public async Task<IEnumerable<QuotationResponseDto>> GetAllQuotationsAsync(
-         int? customerId = null, // Added parameter
+         int? customerId = null,
          string? search = null,
          string? status = null,
          DateTime? startDate = null,
          DateTime? endDate = null,
          string? sortBy = null,
-         bool ascending = true)
+         bool ascending = true,
+         bool unbilledOnly = false)
         {
             var query = _context.Quotations
             .Include(q => q.Customer)
@@ -36,6 +37,16 @@ namespace Firefly.Infrastructure.Services
             if (customerId.HasValue)
             {
                 query = query.Where(q => q.CustomerId == customerId.Value);
+            }
+
+            // Filter out quotations that already have an active invoice generated
+            if (unbilledOnly)
+            {
+                var invoicedQuotationIds = _context.Invoices
+                    .Where(i => !i.IsDeleted && i.Status != "Cancelled" && i.QuotationId != null)
+                    .Select(i => i.QuotationId!.Value);
+
+                query = query.Where(q => !invoicedQuotationIds.Contains(q.QuotationId));
             }
 
             if (!string.IsNullOrWhiteSpace(search))

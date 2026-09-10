@@ -3,7 +3,8 @@
     public record GlobalSearchResponseDto(
         List<SearchItemDto> Customers,
         List<SearchItemDto> Quotations,
-        List<SearchItemDto> Invoices
+        List<SearchItemDto> Invoices,
+        List<SearchItemDto> Products
     );
 
     public record SearchItemDto(

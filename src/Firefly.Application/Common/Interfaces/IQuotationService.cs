@@ -12,7 +12,8 @@ namespace Firefly.Application.Common.Interfaces
          DateTime? startDate = null,
          DateTime? endDate = null,
          string? sortBy = null,
-         bool ascending = true);
+         bool ascending = true,
+         bool unbilledOnly = false);
         Task<QuotationResponseDto?> GetQuotationByIdAsync(int id);
         Task<QuotationResponseDto> CreateQuotationAsync(CreateQuotationDto dto, string userId);
         Task<bool> UpdateQuotationAsync(int id, UpdateQuotationDto dto, string userId);

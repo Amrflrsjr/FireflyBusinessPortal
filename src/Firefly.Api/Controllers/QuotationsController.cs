@@ -26,9 +26,10 @@ namespace Firefly.Api.Controllers
             [FromQuery] DateTime? startDate,
             [FromQuery] DateTime? endDate,
             [FromQuery] string? sortBy,
-            [FromQuery] bool ascending = true)
+            [FromQuery] bool ascending = true,
+            [FromQuery] bool unbilledOnly = false)
         {
-            var quotations = await _quotationService.GetAllQuotationsAsync(customerId, search, status, startDate, endDate, sortBy, ascending);
+            var quotations = await _quotationService.GetAllQuotationsAsync(customerId, search, status, startDate, endDate, sortBy, ascending, unbilledOnly);
             return Ok(quotations);
         }
 
