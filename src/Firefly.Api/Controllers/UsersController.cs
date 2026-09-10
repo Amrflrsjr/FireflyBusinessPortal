@@ -57,10 +57,16 @@ namespace Firefly.Api.Controllers
                 var bucketName = _configuration["AWS:BucketName"];
                 var s3Client = CreateS3Client();
 
-                // Normalize the object key (strip out any full domain prefix if previously stored)
-                var objectKey = profilePictureUrl.StartsWith("http")
-                    ? new Uri(profilePictureUrl).AbsolutePath.TrimStart('/')
-                    : profilePictureUrl.TrimStart('/');
+                // Strip out the full domain if a full URL was accidentally saved in the database
+                var objectKey = profilePictureUrl;
+                if (profilePictureUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    var uri = new Uri(profilePictureUrl);
+                    objectKey = uri.AbsolutePath.TrimStart('/');
+                }
+
+                // URL-decode to safely handle any legacy spaces or %20 encoding
+                objectKey = Uri.UnescapeDataString(objectKey).TrimStart('/');
 
                 var request = new Amazon.S3.Model.GetPreSignedUrlRequest
                 {
@@ -73,7 +79,6 @@ namespace Firefly.Api.Controllers
             }
             catch
             {
-                // Fallback to stored string if pre-signing fails
                 return profilePictureUrl;
             }
         }
@@ -142,12 +147,7 @@ namespace Firefly.Api.Controllers
                     await fileTransferUtility.UploadAsync(uploadRequest);
                 }
 
-                // Save only the clean relative object key in the database
                 user.ProfilePictureUrl = fileName;
-            }
-            else if (!string.IsNullOrEmpty(dto.ProfilePictureUrl))
-            {
-                user.ProfilePictureUrl = dto.ProfilePictureUrl;
             }
 
             user.UpdatedAt = DateTime.UtcNow;
@@ -213,12 +213,18 @@ namespace Firefly.Api.Controllers
         [Authorize(Roles = "Admin")]
         public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
         {
+            var profilePicKey = dto.ProfilePictureUrl?.Trim() ?? string.Empty;
+            if (profilePicKey.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            {
+                try { profilePicKey = new Uri(profilePicKey).AbsolutePath.TrimStart('/'); } catch { }
+            }
+
             var user = new ApplicationUser
             {
                 UserName = dto.Username.Trim(),
                 Email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty,
                 FullName = dto.FullName?.Trim() ?? string.Empty,
-                ProfilePictureUrl = dto.ProfilePictureUrl?.Trim() ?? string.Empty,
+                ProfilePictureUrl = Uri.UnescapeDataString(profilePicKey).TrimStart('/'),
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
@@ -246,7 +252,22 @@ namespace Firefly.Api.Controllers
 
             user.FullName = dto.FullName?.Trim() ?? user.FullName;
             user.Email = dto.Email?.Trim().ToLowerInvariant() ?? user.Email;
-            user.ProfilePictureUrl = dto.ProfilePictureUrl?.Trim() ?? user.ProfilePictureUrl;
+
+            if (!string.IsNullOrWhiteSpace(dto.ProfilePictureUrl))
+            {
+                var cleanedUrl = dto.ProfilePictureUrl.Trim();
+                if (cleanedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var uri = new Uri(cleanedUrl);
+                        cleanedUrl = uri.AbsolutePath.TrimStart('/');
+                    }
+                    catch { }
+                }
+                user.ProfilePictureUrl = Uri.UnescapeDataString(cleanedUrl).TrimStart('/');
+            }
+
             user.IsActive = dto.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
 
