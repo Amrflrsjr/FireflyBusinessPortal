@@ -48,7 +48,15 @@ namespace Firefly.Infrastructure.Services
                 query = query.Where(c =>
                     c.CustomerId.ToString() == search ||
                     c.CompanyName.ToLower().Contains(search) ||
-                    (!string.IsNullOrEmpty(c.TIN) && c.TIN.ToLower().Contains(search))
+                    (!string.IsNullOrEmpty(c.TIN) && c.TIN.ToLower().Contains(search)) ||
+                    c.Contacts.Any(ct =>
+                        ct.IsActive && (
+                            ct.Name.ToLower().Contains(search) ||
+                            (!string.IsNullOrEmpty(ct.Email) && ct.Email.ToLower().Contains(search)) ||
+                            (!string.IsNullOrEmpty(ct.Phone) && ct.Phone.ToLower().Contains(search)) ||
+                            (!string.IsNullOrEmpty(ct.Position) && ct.Position.ToLower().Contains(search))
+                        )
+                    )
                 );
             }
 
