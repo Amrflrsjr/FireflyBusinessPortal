@@ -381,9 +381,9 @@ namespace Firefly.Api.Controllers
             return Ok(new { message = "Password reset successfully." });
         }
 
-        [HttpDelete("{id}")]
+        [HttpPost("{id}/deactivate")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> DeleteUser(string id)
+        public async Task<IActionResult> DeactivateUser(string id)
         {
             var user = await _userManager.FindByIdAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
@@ -393,6 +393,27 @@ namespace Firefly.Api.Controllers
             await _userManager.UpdateAsync(user);
 
             return Ok(new { message = "User deactivated successfully." });
+        }
+
+        [HttpDelete("{id}")]
+        [Authorize(Roles = "Admin")]
+        public async Task<IActionResult> DeleteUser(string id)
+        {
+            var user = await _userManager.FindByIdAsync(id);
+            if (user == null) return NotFound(new { message = "User not found" });
+
+            if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
+            {
+                var bucketName = _configuration["AWS:BucketName"];
+                var s3Client = CreateS3Client();
+                await DeleteOldProfilePictureAsync(user.ProfilePictureUrl, s3Client, bucketName);
+            }
+
+            var result = await _userManager.DeleteAsync(user);
+            if (!result.Succeeded)
+                return BadRequest(new { message = "Failed to delete user", errors = result.Errors.Select(e => e.Description) });
+
+            return Ok(new { message = "User permanently deleted successfully." });
         }
     }
 }
