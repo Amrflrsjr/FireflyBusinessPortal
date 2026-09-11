@@ -272,7 +272,11 @@ namespace Firefly.Api.Controllers
 
         [HttpPut("{id}")]
         [Authorize(Roles = "Admin")]
-        public async Task<IActionResult> UpdateUser(string id, [FromBody] UpdateUserDto dto)
+        [Consumes("multipart/form-data")]
+        public async Task<IActionResult> UpdateUser(
+            string id,
+            [FromForm] UpdateUserDto dto,
+            IFormFile? profilePicture)
         {
             var user = await _userManager.FindByIdAsync(id);
             if (user == null) return NotFound(new { message = "User not found" });
@@ -280,17 +284,41 @@ namespace Firefly.Api.Controllers
             user.FullName = dto.FullName?.Trim() ?? user.FullName;
             user.Email = dto.Email?.Trim().ToLowerInvariant() ?? user.Email;
 
-            if (!string.IsNullOrWhiteSpace(dto.ProfilePictureUrl))
+            // Handle file upload if provided by admin
+            if (profilePicture != null && profilePicture.Length > 0)
             {
                 var bucketName = _configuration["AWS:BucketName"];
                 var s3Client = CreateS3Client();
+                var fileTransferUtility = new TransferUtility(s3Client);
 
-                // Delete old photo if updating to a new path/URL
-                if (!string.IsNullOrEmpty(user.ProfilePictureUrl) && user.ProfilePictureUrl != dto.ProfilePictureUrl)
+                if (!string.IsNullOrEmpty(user.ProfilePictureUrl))
                 {
                     await DeleteOldProfilePictureAsync(user.ProfilePictureUrl, s3Client, bucketName);
                 }
 
+                var cleanFileName = Path.GetFileName(profilePicture.FileName)
+                    .Replace(" ", "_")
+                    .Replace("%20", "_");
+
+                var fileName = $"avatars/{Guid.NewGuid()}_{cleanFileName}";
+
+                using (var stream = profilePicture.OpenReadStream())
+                {
+                    var uploadRequest = new TransferUtilityUploadRequest
+                    {
+                        InputStream = stream,
+                        Key = fileName,
+                        BucketName = bucketName ?? string.Empty
+                    };
+
+                    await fileTransferUtility.UploadAsync(uploadRequest);
+                }
+
+                user.ProfilePictureUrl = fileName;
+            }
+            else if (!string.IsNullOrWhiteSpace(dto.ProfilePictureUrl))
+            {
+                // Fallback if a string path/URL was explicitly passed
                 var cleanedUrl = dto.ProfilePictureUrl.Trim();
                 if (cleanedUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 {
@@ -303,6 +331,8 @@ namespace Firefly.Api.Controllers
                 }
                 user.ProfilePictureUrl = Uri.UnescapeDataString(cleanedUrl).TrimStart('/');
             }
+            // Note: If profilePicture is null and dto.ProfilePictureUrl is empty, 
+            // we intentionally DO NOT touch user.ProfilePictureUrl so it preserves the existing image!
 
             user.IsActive = dto.IsActive;
             user.UpdatedAt = DateTime.UtcNow;
@@ -323,7 +353,8 @@ namespace Firefly.Api.Controllers
                 await _userManager.AddToRoleAsync(user, dto.Role);
             }
 
-            return Ok(new { message = "User updated successfully" });
+            var updatedPictureUrl = GetPublicProfilePictureUrl(user.ProfilePictureUrl);
+            return Ok(new { message = "User updated successfully", profilePictureUrl = updatedPictureUrl });
         }
 
         [HttpPost("{id}/reset-password")]
