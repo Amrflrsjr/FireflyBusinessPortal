@@ -159,7 +159,9 @@ namespace Firefly.Infrastructure.Services
                     }).ToList()
                 };
 
-                quotation.Status = "Accepted";
+                // Update quotation status to Approved so the quotations table reflects it immediately upon conversion
+                quotation.Status = "Approved";
+                _context.Quotations.Update(quotation);
 
                 _context.Invoices.Add(invoice);
 

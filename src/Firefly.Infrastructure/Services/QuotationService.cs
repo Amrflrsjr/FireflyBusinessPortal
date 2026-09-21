@@ -28,8 +28,10 @@ namespace Firefly.Infrastructure.Services
             var query = _context.Quotations
             .Include(q => q.Customer)
             .Include(q => q.Items)
+                .ThenInclude(i => i.Product) // Include direct product relationship
+            .Include(q => q.Items)
                 .ThenInclude(i => i.ProductVariant!)
-                    .ThenInclude(v => v.Product)
+                    .ThenInclude(v => v.Product) // Include variant's product relationship
             .Where(q => !q.IsDeleted)
             .AsQueryable();
 
@@ -101,6 +103,8 @@ namespace Firefly.Infrastructure.Services
         {
             var q = await _context.Quotations
             .Include(x => x.Customer)
+            .Include(x => x.Items)
+                .ThenInclude(i => i.Product)
             .Include(x => x.Items)
                 .ThenInclude(i => i.ProductVariant!)
                     .ThenInclude(v => v.Product)
@@ -199,6 +203,7 @@ namespace Firefly.Infrastructure.Services
             {
                 quotation.Items.Add(new QuotationItem
                 {
+                    ProductId = item.ProductId,
                     ProductVariantId = item.ProductVariantId,
                     Description = item.Description,
                     Quantity = item.Quantity,
@@ -305,6 +310,7 @@ namespace Firefly.Infrastructure.Services
             {
                 quotation.Items.Add(new QuotationItem
                 {
+                    ProductId = item.ProductId,
                     ProductVariantId = item.ProductVariantId,
                     Description = item.Description,
                     Quantity = item.Quantity,
@@ -366,7 +372,10 @@ namespace Firefly.Infrastructure.Services
                     i.Quantity,
                     i.UnitPrice,
                     i.TotalAmount,
-                    i.ProductVariant != null && i.ProductVariant.Product != null ? i.ProductVariant.Product.Name : null,
+                    // Resolves product name either from the selected variant or directly from the product
+                    i.ProductVariant != null && i.ProductVariant.Product != null
+                        ? i.ProductVariant.Product.Name
+                        : (i.Product != null ? i.Product.Name : null),
                     i.ProductVariant != null ? i.ProductVariant.SKU : null,
                     i.ProductVariant != null ? i.ProductVariant.Color : null,
                     i.ProductVariant != null ? i.ProductVariant.Size : null
@@ -414,6 +423,8 @@ namespace Firefly.Infrastructure.Services
         {
             var query = _context.Quotations
                 .Include(q => q.Customer)
+                .Include(q => q.Items)
+                    .ThenInclude(i => i.Product)
                 .Include(q => q.Items)
                     .ThenInclude(i => i.ProductVariant!)
                         .ThenInclude(v => v.Product)

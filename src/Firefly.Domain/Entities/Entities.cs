@@ -131,7 +131,11 @@ namespace Firefly.Domain.Entities
         public int QuotationId { get; set; }
         public Quotation Quotation { get; set; } = null!;
 
-        // Made Nullable (int?) to allow custom non-catalog items
+        // Optional direct Product link for products without variants
+        public int? ProductId { get; set; }
+        public Product? Product { get; set; }
+
+        // Optional Variant link
         public int? ProductVariantId { get; set; }
         public ProductVariant? ProductVariant { get; set; }
 

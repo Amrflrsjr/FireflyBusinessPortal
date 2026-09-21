@@ -1,11 +1,12 @@
 ﻿namespace Firefly.Application.Quotations.Dtos
 {
     public record CreateQuotationItemDto(
-        int? ProductVariantId,
-        string Description,
-        int Quantity,
-        decimal UnitPrice
-    );
+      int? ProductId,
+      int? ProductVariantId,
+      string Description,
+      int Quantity,
+      decimal UnitPrice
+  );
 
     public record CreateQuotationDto(
         int CustomerId,

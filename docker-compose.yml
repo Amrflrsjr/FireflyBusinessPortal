@@ -15,7 +15,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: src/Firefly.Api/Dockerfile
+      dockerfile: Dockerfile
     image: firefly-api:latest
     container_name: firefly-api
     restart: unless-stopped
