@@ -275,14 +275,23 @@ namespace Firefly.Infrastructure.Services
 
             if (product == null) return false;
 
-            // Check if any quotation items reference this product or its variants
             var variantIds = product.Variants.Select(v => v.ProductVariantId).ToList();
-            bool isReferenced = await _context.Set<QuotationItem>()
-                .AnyAsync(qi => qi.ProductId == id || (qi.ProductVariantId.HasValue && variantIds.Contains(qi.ProductVariantId.Value)));
 
-            if (isReferenced)
+            // Find all quotation items referencing this product or its variants and nullify them
+            var relatedItems = await _context.Set<QuotationItem>()
+                .Where(qi => qi.ProductId == id || (qi.ProductVariantId.HasValue && variantIds.Contains(qi.ProductVariantId.Value)))
+                .ToListAsync();
+
+            foreach (var item in relatedItems)
             {
-                throw new InvalidOperationException("Cannot permanently delete this product because it has associated quotations. Please use soft delete instead.");
+                if (item.ProductId == id)
+                {
+                    item.ProductId = null;
+                }
+                if (item.ProductVariantId.HasValue && variantIds.Contains(item.ProductVariantId.Value))
+                {
+                    item.ProductVariantId = null;
+                }
             }
 
             _context.Products.Remove(product);
@@ -350,13 +359,14 @@ namespace Firefly.Infrastructure.Services
 
             if (variant == null) return false;
 
-            // Check if any quotation items reference this variant
-            bool isReferenced = await _context.Set<QuotationItem>()
-                .AnyAsync(qi => qi.ProductVariantId == variantId);
+            // Find all quotation items referencing this variant and nullify them
+            var relatedItems = await _context.Set<QuotationItem>()
+                .Where(qi => qi.ProductVariantId == variantId)
+                .ToListAsync();
 
-            if (isReferenced)
+            foreach (var item in relatedItems)
             {
-                throw new InvalidOperationException("Cannot permanently delete this variant because it is referenced in existing quotations.");
+                item.ProductVariantId = null;
             }
 
             _context.ProductVariants.Remove(variant);
