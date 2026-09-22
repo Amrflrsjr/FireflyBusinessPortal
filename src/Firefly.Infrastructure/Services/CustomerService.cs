@@ -422,6 +422,13 @@ namespace Firefly.Infrastructure.Services
 
             if (customer == null) return false;
 
+            // Check if any quotations are linked directly to this customer
+            bool hasQuotations = await _context.Quotations.AnyAsync(q => q.CustomerId == id);
+            if (hasQuotations)
+            {
+                throw new InvalidOperationException("Cannot permanently delete this customer because they have associated quotations. Please delete those quotations first or use soft delete.");
+            }
+
             var contactIds = customer.Contacts.Select(c => c.ContactId).ToList();
 
             if (contactIds.Any())

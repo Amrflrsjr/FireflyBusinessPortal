@@ -270,9 +270,20 @@ namespace Firefly.Infrastructure.Services
         {
             var product = await _context.Products
                 .Include(p => p.Variants)
-                .FirstOrDefaultAsync(p => p.ProductId == id && p.IsDeleted);
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(p => p.ProductId == id);
 
             if (product == null) return false;
+
+            // Check if any quotation items reference this product or its variants
+            var variantIds = product.Variants.Select(v => v.ProductVariantId).ToList();
+            bool isReferenced = await _context.Set<QuotationItem>()
+                .AnyAsync(qi => qi.ProductId == id || (qi.ProductVariantId.HasValue && variantIds.Contains(qi.ProductVariantId.Value)));
+
+            if (isReferenced)
+            {
+                throw new InvalidOperationException("Cannot permanently delete this product because it has associated quotations. Please use soft delete instead.");
+            }
 
             _context.Products.Remove(product);
             await _context.SaveChangesAsync();
@@ -333,8 +344,20 @@ namespace Firefly.Infrastructure.Services
 
         public async Task<bool> PermanentlyDeleteVariantAsync(int variantId)
         {
-            var variant = await _context.ProductVariants.FindAsync(variantId);
+            var variant = await _context.ProductVariants
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+
             if (variant == null) return false;
+
+            // Check if any quotation items reference this variant
+            bool isReferenced = await _context.Set<QuotationItem>()
+                .AnyAsync(qi => qi.ProductVariantId == variantId);
+
+            if (isReferenced)
+            {
+                throw new InvalidOperationException("Cannot permanently delete this variant because it is referenced in existing quotations.");
+            }
 
             _context.ProductVariants.Remove(variant);
             await _context.SaveChangesAsync();
