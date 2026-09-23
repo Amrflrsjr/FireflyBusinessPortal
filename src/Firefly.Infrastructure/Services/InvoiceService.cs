@@ -17,7 +17,7 @@ namespace Firefly.Infrastructure.Services
         }
 
         public async Task<IEnumerable<InvoiceResponseDto>> GetAllInvoicesAsync(
-        int? customerId = null, // Added parameter
+        int? customerId = null,
         string? search = null,
         string? status = null,
         DateTime? startDate = null,
@@ -30,12 +30,10 @@ namespace Firefly.Infrastructure.Services
                     .ThenInclude(q => q!.Customer)
                 .Include(i => i.Payments)
                 .Include(i => i.Items)
-                    .ThenInclude(item => item.ProductVariant!)
-                        .ThenInclude(v => v!.Product)
+                    .ThenInclude(item => item.Product) // Directly include Product on InvoiceItem
                 .Where(i => !i.IsDeleted)
                 .AsQueryable();
 
-            // Filter by customer ID if provided
             if (customerId.HasValue)
             {
                 query = query.Where(i => i.CustomerId == customerId.Value);
@@ -98,8 +96,7 @@ namespace Firefly.Infrastructure.Services
                     .ThenInclude(q => q!.Customer)
                 .Include(i => i.Payments)
                 .Include(i => i.Items)
-                    .ThenInclude(item => item.ProductVariant!)
-                        .ThenInclude(v => v!.Product)
+                    .ThenInclude(item => item.Product) // Directly include Product on InvoiceItem
                 .FirstOrDefaultAsync(i => i.InvoiceId == id && !i.IsDeleted);
 
             if (invoice == null) return null;
@@ -128,7 +125,6 @@ namespace Firefly.Infrastructure.Services
             {
                 var invoiceNumber = quotation.QuotationNumber;
 
-                // Fallback to quotation's NoteToCustomer if the DTO notes are empty/null
                 var invoiceNotes = !string.IsNullOrWhiteSpace(dto.Notes)
                      ? dto.Notes
                      : (quotation.NoteToCustomer ?? string.Empty);
@@ -151,11 +147,12 @@ namespace Firefly.Infrastructure.Services
                     TotalAmount = quotation.TotalAmount,
                     TotalPaid = 0,
                     BalanceDue = quotation.TotalAmount,
-                    Notes = invoiceNotes, // <-- Assigns the inherited or customized invoice note here
+                    Notes = invoiceNotes,
                     CreatedByFK = userId,
                     CreatedAt = DateTime.UtcNow,
                     Items = quotation.Items.Select(qi => new InvoiceItem
                     {
+                        ProductId = qi.ProductId, // Map ProductId directly from QuotationItem
                         ProductVariantId = qi.ProductVariantId,
                         Description = qi.Description,
                         Quantity = qi.Quantity,
@@ -164,7 +161,6 @@ namespace Firefly.Infrastructure.Services
                     }).ToList()
                 };
 
-                // Update quotation status to Approved so the quotations table reflects it immediately upon conversion
                 quotation.Status = "Approved";
                 _context.Quotations.Update(quotation);
 
@@ -250,10 +246,12 @@ namespace Firefly.Infrastructure.Services
                 item.Quantity,
                 item.UnitPrice,
                 item.TotalAmount,
-                item.ProductVariant?.Product?.Name,
-                item.ProductVariant?.SKU,
-                item.ProductVariant?.Color,
-                item.ProductVariant?.Size
+                // Resolve product name from direct Product relation, falling back to Description
+                item.Product?.Name
+                    ?? (!string.IsNullOrWhiteSpace(item.Description) ? item.Description : "Item"),
+                null,
+                null,
+                null
             )).ToList() ?? new List<QuotationItemResponseDto>();
 
             return new InvoiceResponseDto(
@@ -331,8 +329,7 @@ namespace Firefly.Infrastructure.Services
                     .ThenInclude(q => q!.Customer)
                 .Include(i => i.Payments)
                 .Include(i => i.Items)
-                    .ThenInclude(item => item.ProductVariant!)
-                        .ThenInclude(v => v!.Product)
+                    .ThenInclude(item => item.Product)
                 .Where(i => i.IsDeleted)
                 .AsQueryable();
 
@@ -351,7 +348,6 @@ namespace Firefly.Infrastructure.Services
                 .Select(i => MapToDto(i))
                 .ToListAsync();
         }
-
 
         public async Task<bool> UpdateInvoiceNotesAsync(int invoiceId, string notes)
         {

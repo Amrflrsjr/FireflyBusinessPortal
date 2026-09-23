@@ -191,6 +191,9 @@ namespace Firefly.Domain.Entities
         public int? ProductVariantId { get; set; }
         public ProductVariant? ProductVariant { get; set; }
 
+        public int? ProductId { get; set; }
+        public Product? Product { get; set; }
+
         public string Description { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public decimal UnitPrice { get; set; }
