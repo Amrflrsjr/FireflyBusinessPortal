@@ -55,4 +55,6 @@ namespace Firefly.Application.Invoices.Dtos
         List<PaymentResponseDto> Payments,
         List<QuotationItemResponseDto> Items
     );
+
+    public record UpdateInvoiceNotesDto(string Notes);
 }

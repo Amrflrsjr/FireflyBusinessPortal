@@ -24,5 +24,6 @@ namespace Firefly.Application.Common.Interfaces
         Task<bool> UpdateStatusAsync(int id, string status);
         Task<bool> RestoreInvoiceAsync(int id);
         Task<bool> PermanentlyDeleteInvoiceAsync(int id);
+        Task<bool> UpdateInvoiceNotesAsync(int id, string notes);
     }
 }

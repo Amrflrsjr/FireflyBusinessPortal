@@ -128,6 +128,14 @@ namespace Firefly.Api.Controllers
             return NoContent();
         }
 
+        [HttpPatch("{id:int}/notes")]
+        public async Task<IActionResult> UpdateNotes(int id, [FromBody] UpdateInvoiceNotesDto dto)
+        {
+            var updated = await _invoiceService.UpdateInvoiceNotesAsync(id, dto.Notes);
+            if (!updated) return NotFound();
+            return NoContent();
+        }
+
         [HttpGet("deleted")]
         public async Task<IActionResult> GetDeletedInvoices([FromQuery] string? search)
         {

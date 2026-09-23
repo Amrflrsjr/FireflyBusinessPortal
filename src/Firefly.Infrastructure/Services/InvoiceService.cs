@@ -128,6 +128,11 @@ namespace Firefly.Infrastructure.Services
             {
                 var invoiceNumber = quotation.QuotationNumber;
 
+                // Fallback to quotation's NoteToCustomer if the DTO notes are empty/null
+                var invoiceNotes = !string.IsNullOrWhiteSpace(dto.Notes)
+                     ? dto.Notes
+                     : (quotation.NoteToCustomer ?? string.Empty);
+
                 var invoice = new Invoice
                 {
                     InvoiceNumber = invoiceNumber,
@@ -146,7 +151,7 @@ namespace Firefly.Infrastructure.Services
                     TotalAmount = quotation.TotalAmount,
                     TotalPaid = 0,
                     BalanceDue = quotation.TotalAmount,
-                    Notes = dto.Notes,
+                    Notes = invoiceNotes, // <-- Assigns the inherited or customized invoice note here
                     CreatedByFK = userId,
                     CreatedAt = DateTime.UtcNow,
                     Items = quotation.Items.Select(qi => new InvoiceItem
@@ -345,6 +350,19 @@ namespace Firefly.Infrastructure.Services
                 .OrderByDescending(i => i.CreatedAt)
                 .Select(i => MapToDto(i))
                 .ToListAsync();
+        }
+
+
+        public async Task<bool> UpdateInvoiceNotesAsync(int invoiceId, string notes)
+        {
+            var invoice = await _context.Invoices.FirstOrDefaultAsync(i => i.InvoiceId == invoiceId && !i.IsDeleted);
+            if (invoice == null) return false;
+
+            invoice.Notes = notes ?? string.Empty;
+            _context.Invoices.Update(invoice);
+            await _context.SaveChangesAsync();
+
+            return true;
         }
 
         public async Task<bool> UpdateStatusAsync(int id, string status)

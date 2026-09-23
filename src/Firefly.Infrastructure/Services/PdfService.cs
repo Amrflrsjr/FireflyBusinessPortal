@@ -187,17 +187,32 @@ namespace Firefly.Infrastructure.Services
 
                                 table.Cell().Background(bgColor).Padding(6).Column(column =>
                                 {
+                                    // Use item.ProductName if available, otherwise fallback to description title
+                                    string primaryText = !string.IsNullOrWhiteSpace(item.ProductName)
+                                        ? item.ProductName
+                                        : (item.Description?.Split('\n').FirstOrDefault() ?? "Item");
+
                                     column.Item().Text(primaryText).Bold().FontSize(9);
 
-                                    // Display secondary custom description/notes underneath if added by user
-                                    if (hasExtraDescription)
+                                    // If there is an expanded multi-line description or inclusions block
+                                    if (!string.IsNullOrWhiteSpace(item.Description))
                                     {
-                                        column.Item().Text(item.Description).FontSize(8).FontColor(Colors.Grey.Darken1);
+                                        // Avoid repeating the product name if it's already the first line
+                                        string detailText = item.Description;
+                                        if (!string.IsNullOrWhiteSpace(item.ProductName) && detailText.StartsWith(item.ProductName, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            detailText = detailText.Substring(item.ProductName.Length).TrimStart('\r', '\n', ' ');
+                                        }
+
+                                        if (!string.IsNullOrWhiteSpace(detailText))
+                                        {
+                                            column.Item().PaddingTop(2).Text(detailText).FontSize(8).FontColor(Colors.Grey.Darken1);
+                                        }
                                     }
 
                                     if (!string.IsNullOrWhiteSpace(item.SKU))
                                     {
-                                        column.Item().Text($"SKU: {item.SKU}").FontSize(8).FontColor(Colors.Grey.Medium);
+                                        column.Item().PaddingTop(2).Text($"SKU: {item.SKU}").FontSize(8).FontColor(Colors.Grey.Medium);
                                     }
                                 });
 
@@ -218,11 +233,15 @@ namespace Firefly.Infrastructure.Services
                                 if (!string.IsNullOrWhiteSpace(q.NoteToCustomer))
                                 {
                                     c.Item().Text("Note: ").FontSize(9);
+                                    c.Item().PaddingTop(2);
                                     c.Item().Text(q.NoteToCustomer).FontSize(9).Bold();
                                     c.Item().PaddingTop(10);
                                 }
-
                                 c.Item().Text("To proceed with this transaction, we require 50% downpayment.").FontSize(9);
+                                c.Item().PaddingTop(6);
+                                c.Item().Text("BPI").Bold().FontSize(9);
+                                c.Item().Text("Account Name: NXF STICKER SHOP").FontSize(9);
+                                c.Item().Text("Account Number: 0420-334-198").FontSize(9);
                                 c.Item().PaddingTop(6);
                                 c.Item().Text("Bank: Metrobank").Bold().FontSize(9);
                                 c.Item().Text("Account Name: NXF STICKER SHOP").FontSize(9);
