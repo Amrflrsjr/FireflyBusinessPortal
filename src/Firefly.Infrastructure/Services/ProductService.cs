@@ -277,24 +277,62 @@ namespace Firefly.Infrastructure.Services
 
             var variantIds = product.Variants.Select(v => v.ProductVariantId).ToList();
 
-            // Find all quotation items referencing this product or its variants and nullify them
-            var relatedItems = await _context.Set<QuotationItem>()
+            // Nullify references in QuotationItems
+            var relatedQuotationItems = await _context.Set<QuotationItem>()
                 .Where(qi => qi.ProductId == id || (qi.ProductVariantId.HasValue && variantIds.Contains(qi.ProductVariantId.Value)))
                 .ToListAsync();
 
-            foreach (var item in relatedItems)
+            foreach (var item in relatedQuotationItems)
             {
-                if (item.ProductId == id)
-                {
-                    item.ProductId = null;
-                }
-                if (item.ProductVariantId.HasValue && variantIds.Contains(item.ProductVariantId.Value))
-                {
-                    item.ProductVariantId = null;
-                }
+                if (item.ProductId == id) item.ProductId = null;
+                if (item.ProductVariantId.HasValue && variantIds.Contains(item.ProductVariantId.Value)) item.ProductVariantId = null;
+            }
+
+            // Nullify references in InvoiceItems
+            var relatedInvoiceItems = await _context.Set<InvoiceItem>()
+                .Where(ii => ii.ProductId == id || (ii.ProductVariantId.HasValue && variantIds.Contains(ii.ProductVariantId.Value)))
+                .ToListAsync();
+
+            foreach (var item in relatedInvoiceItems)
+            {
+                if (item.ProductId == id) item.ProductId = null;
+                if (item.ProductVariantId.HasValue && variantIds.Contains(item.ProductVariantId.Value)) item.ProductVariantId = null;
             }
 
             _context.Products.Remove(product);
+            await _context.SaveChangesAsync();
+            return true;
+        }
+
+        public async Task<bool> PermanentlyDeleteVariantAsync(int variantId)
+        {
+            var variant = await _context.ProductVariants
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
+
+            if (variant == null) return false;
+
+            // Nullify references in QuotationItems
+            var relatedQuotationItems = await _context.Set<QuotationItem>()
+                .Where(qi => qi.ProductVariantId == variantId)
+                .ToListAsync();
+
+            foreach (var item in relatedQuotationItems)
+            {
+                item.ProductVariantId = null;
+            }
+
+            // Nullify references in InvoiceItems
+            var relatedInvoiceItems = await _context.Set<InvoiceItem>()
+                .Where(ii => ii.ProductVariantId == variantId)
+                .ToListAsync();
+
+            foreach (var item in relatedInvoiceItems)
+            {
+                item.ProductVariantId = null;
+            }
+
+            _context.ProductVariants.Remove(variant);
             await _context.SaveChangesAsync();
             return true;
         }
@@ -347,29 +385,6 @@ namespace Firefly.Infrastructure.Services
                 variant.Product.UpdatedAt = DateTime.UtcNow;
             }
 
-            await _context.SaveChangesAsync();
-            return true;
-        }
-
-        public async Task<bool> PermanentlyDeleteVariantAsync(int variantId)
-        {
-            var variant = await _context.ProductVariants
-                .IgnoreQueryFilters()
-                .FirstOrDefaultAsync(v => v.ProductVariantId == variantId);
-
-            if (variant == null) return false;
-
-            // Find all quotation items referencing this variant and nullify them
-            var relatedItems = await _context.Set<QuotationItem>()
-                .Where(qi => qi.ProductVariantId == variantId)
-                .ToListAsync();
-
-            foreach (var item in relatedItems)
-            {
-                item.ProductVariantId = null;
-            }
-
-            _context.ProductVariants.Remove(variant);
             await _context.SaveChangesAsync();
             return true;
         }

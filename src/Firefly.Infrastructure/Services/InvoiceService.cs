@@ -30,7 +30,7 @@ namespace Firefly.Infrastructure.Services
                     .ThenInclude(q => q!.Customer)
                 .Include(i => i.Payments)
                 .Include(i => i.Items)
-                    .ThenInclude(item => item.Product) // Directly include Product on InvoiceItem
+                    .ThenInclude(item => item.Product)
                 .Where(i => !i.IsDeleted)
                 .AsQueryable();
 
@@ -96,7 +96,7 @@ namespace Firefly.Infrastructure.Services
                     .ThenInclude(q => q!.Customer)
                 .Include(i => i.Payments)
                 .Include(i => i.Items)
-                    .ThenInclude(item => item.Product) // Directly include Product on InvoiceItem
+                    .ThenInclude(item => item.Product)
                 .FirstOrDefaultAsync(i => i.InvoiceId == id && !i.IsDeleted);
 
             if (invoice == null) return null;
@@ -152,8 +152,10 @@ namespace Firefly.Infrastructure.Services
                     CreatedAt = DateTime.UtcNow,
                     Items = quotation.Items.Select(qi => new InvoiceItem
                     {
-                        ProductId = qi.ProductId, // Map ProductId directly from QuotationItem
+                        ProductId = qi.ProductId,
                         ProductVariantId = qi.ProductVariantId,
+                        ProductNameSnapshot = qi.ProductNameSnapshot, // Copy snapshot from quotation item
+                        VariantNameSnapshot = qi.VariantNameSnapshot, // Copy snapshot from quotation item
                         Description = qi.Description,
                         Quantity = qi.Quantity,
                         UnitPrice = qi.UnitPrice,
@@ -246,9 +248,10 @@ namespace Firefly.Infrastructure.Services
                 item.Quantity,
                 item.UnitPrice,
                 item.TotalAmount,
-                // Resolve product name from direct Product relation, falling back to Description
-                item.Product?.Name
-                    ?? (!string.IsNullOrWhiteSpace(item.Description) ? item.Description : "Item"),
+                // Prioritize ProductNameSnapshot, falling back to live relation or description
+                !string.IsNullOrEmpty(item.ProductNameSnapshot)
+                    ? item.ProductNameSnapshot
+                    : (item.Product != null ? item.Product.Name : (!string.IsNullOrWhiteSpace(item.Description) ? item.Description : "Item")),
                 null,
                 null,
                 null

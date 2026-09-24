@@ -28,20 +28,18 @@ namespace Firefly.Infrastructure.Services
             var query = _context.Quotations
             .Include(q => q.Customer)
             .Include(q => q.Items)
-                .ThenInclude(i => i.Product) // Include direct product relationship
+                .ThenInclude(i => i.Product)
             .Include(q => q.Items)
                 .ThenInclude(i => i.ProductVariant!)
-                    .ThenInclude(v => v.Product) // Include variant's product relationship
+                    .ThenInclude(v => v.Product)
             .Where(q => !q.IsDeleted)
             .AsQueryable();
 
-            // Filter by customer ID if provided
             if (customerId.HasValue)
             {
                 query = query.Where(q => q.CustomerId == customerId.Value);
             }
 
-            // Filter out quotations that already have an active invoice generated
             if (unbilledOnly)
             {
                 var invoicedQuotationIds = _context.Invoices
@@ -201,10 +199,34 @@ namespace Firefly.Infrastructure.Services
 
             foreach (var item in dto.Items)
             {
+                string productName = string.Empty;
+                string variantName = string.Empty;
+
+                if (item.ProductId.HasValue)
+                {
+                    var prod = await _context.Products.FindAsync(item.ProductId.Value);
+                    productName = prod?.Name ?? string.Empty;
+                }
+
+                if (item.ProductVariantId.HasValue)
+                {
+                    var variant = await _context.ProductVariants
+                        .Include(v => v.Product)
+                        .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantId.Value);
+
+                    variantName = $"{variant?.Color} {variant?.Size}".Trim();
+                    if (string.IsNullOrEmpty(productName) && variant?.Product != null)
+                    {
+                        productName = variant.Product.Name;
+                    }
+                }
+
                 quotation.Items.Add(new QuotationItem
                 {
                     ProductId = item.ProductId,
                     ProductVariantId = item.ProductVariantId,
+                    ProductNameSnapshot = productName,
+                    VariantNameSnapshot = variantName,
                     Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
@@ -308,10 +330,34 @@ namespace Firefly.Infrastructure.Services
 
             foreach (var item in dto.Items)
             {
+                string productName = string.Empty;
+                string variantName = string.Empty;
+
+                if (item.ProductId.HasValue)
+                {
+                    var prod = await _context.Products.FindAsync(item.ProductId.Value);
+                    productName = prod?.Name ?? string.Empty;
+                }
+
+                if (item.ProductVariantId.HasValue)
+                {
+                    var variant = await _context.ProductVariants
+                        .Include(v => v.Product)
+                        .FirstOrDefaultAsync(v => v.ProductVariantId == item.ProductVariantId.Value);
+
+                    variantName = $"{variant?.Color} {variant?.Size}".Trim();
+                    if (string.IsNullOrEmpty(productName) && variant?.Product != null)
+                    {
+                        productName = variant.Product.Name;
+                    }
+                }
+
                 quotation.Items.Add(new QuotationItem
                 {
                     ProductId = item.ProductId,
                     ProductVariantId = item.ProductVariantId,
+                    ProductNameSnapshot = productName,
+                    VariantNameSnapshot = variantName,
                     Description = item.Description,
                     Quantity = item.Quantity,
                     UnitPrice = item.UnitPrice,
@@ -372,10 +418,12 @@ namespace Firefly.Infrastructure.Services
                     i.Quantity,
                     i.UnitPrice,
                     i.TotalAmount,
-                    // Resolves product name either from the selected variant or directly from the product
-                    i.ProductVariant != null && i.ProductVariant.Product != null
-                        ? i.ProductVariant.Product.Name
-                        : (i.Product != null ? i.Product.Name : null),
+                    // Prioritize ProductNameSnapshot, falling back to live relation if empty
+                    !string.IsNullOrEmpty(i.ProductNameSnapshot)
+                        ? i.ProductNameSnapshot
+                        : (i.ProductVariant != null && i.ProductVariant.Product != null
+                            ? i.ProductVariant.Product.Name
+                            : (i.Product != null ? i.Product.Name : "Item")),
                     i.ProductVariant != null ? i.ProductVariant.SKU : null,
                     i.ProductVariant != null ? i.ProductVariant.Color : null,
                     i.ProductVariant != null ? i.ProductVariant.Size : null
