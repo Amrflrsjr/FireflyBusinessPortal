@@ -115,6 +115,9 @@ namespace Firefly.Infrastructure.Services
                                 col.Item().AlignRight().Text(documentTitle).Bold().FontSize(22).FontColor(Colors.Grey.Darken2);
                                 col.Item().AlignRight().Text($"{q.QuotationNumber}").Bold().FontSize(10);
                                 col.Item().AlignRight().Text($"DATE {q.DateGenerated:MM/dd/yyyy}").FontSize(10);
+                                
+                                string expiryLabel = documentTitle == "INVOICE" ? "DUE DATE" : "VALID UNTIL";
+                                col.Item().AlignRight().Text($"{expiryLabel} {q.ValidUntil:MM/dd/yyyy}").FontSize(10);
                             });
                         });
 
